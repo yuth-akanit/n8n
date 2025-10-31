@@ -44,7 +44,10 @@
       "name": "Prepare Review Data",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
-      "position": [-1000, 300]
+      "position": [
+        -1000,
+        300
+      ]
     },
     {
       "parameters": {
@@ -94,7 +97,38 @@
       "name": "Set • Action",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
-      "position": [-800, 300]
+      "position": [
+        -800,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v19.0/me/feed",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "message",
+              "value": "={{ $('Prepare Review Data').item.json.shortContent }}"
+            },
+            {
+              "name": "access_token",
+              "value": "={{ $('Prepare Review Data').item.json.pageAccessToken }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "post-to-facebook-main",
+      "name": "Post to Facebook",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -200,
+        300
+      ]
     },
     {
       "parameters": {
@@ -119,7 +153,10 @@
       "name": "Post to Facebook_comment",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [-400, 300]
+      "position": [
+        -400,
+        300
+      ]
     },
     {
       "parameters": {
@@ -147,7 +184,9 @@
             "title": "={{ $json.title || 'Default Title' }}",
             "shortContent": "={{ $json.shortContent || ($json.postContent ? $json.postContent.slice(0, 80) + '...' : 'No content') }}"
           },
-          "matchingColumns": ["executionId"],
+          "matchingColumns": [
+            "executionId"
+          ],
           "schema": [
             {
               "id": "executionId",
@@ -220,7 +259,10 @@
       "name": "Append ReviewQueue",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.7,
-      "position": [-600, 300]
+      "position": [
+        -600,
+        300
+      ]
     },
     {
       "parameters": {
@@ -252,7 +294,10 @@
       "name": "Forward Data to Register",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
-      "position": [-1208, 528]
+      "position": [
+        -1208,
+        528
+      ]
     },
     {
       "parameters": {
@@ -265,7 +310,10 @@
       "name": "Webhook • Register",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [-1000, 528],
+      "position": [
+        -1000,
+        528
+      ],
       "webhookId": "approval-register-webhook-id"
     }
   ],
@@ -301,7 +349,7 @@
       "main": [
         [
           {
-            "node": "Post to Facebook_comment",
+            "node": "Post to Facebook",
             "type": "main",
             "index": 0
           }
@@ -313,6 +361,17 @@
         [
           {
             "node": "Webhook • Register",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post to Facebook": {
+      "main": [
+        [
+          {
+            "node": "Post to Facebook_comment",
             "type": "main",
             "index": 0
           }
