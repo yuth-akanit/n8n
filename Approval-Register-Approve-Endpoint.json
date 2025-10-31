@@ -1,0 +1,331 @@
+{
+  "name": "Approval Register + Approve Endpoint",
+  "nodes": [
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "new-executionId",
+              "name": "executionId",
+              "value": "={{ $execution.id }}",
+              "type": "string"
+            },
+            {
+              "id": "existing-resumeUrl",
+              "name": "resumeUrl",
+              "value": "={{ $resumeWebhookUrl }}",
+              "type": "string"
+            },
+            {
+              "id": "existing-title",
+              "name": "title",
+              "value": "={{ $json.postTitle || 'Default Title' }}",
+              "type": "string"
+            },
+            {
+              "id": "existing-shortContent",
+              "name": "shortContent",
+              "value": "={{ $json.postContent ? $json.postContent.slice(0, 80) + '...' : 'No content' }}",
+              "type": "string"
+            },
+            {
+              "id": "existing-pageAccessToken",
+              "name": "pageAccessToken",
+              "value": "={{ $json.pageAccessToken }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "014dda13-6f7c-4b2f-bb4e-f0ffa7b35671",
+      "name": "Prepare Review Data",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [-1000, 300]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "d61f99e5-7a2f-4b59-8dff-4b49eb79c9be",
+              "name": "APPROVAL_TOKEN",
+              "value": "={{ $env.APPROVAL_TOKEN }}",
+              "type": "string"
+            },
+            {
+              "id": "eadebe19-d0f8-4a4f-a364-d67375e8f75b",
+              "name": "title",
+              "value": "={{ $json.title || 'Default Title' }}",
+              "type": "string"
+            },
+            {
+              "id": "045464a6-c60d-4cf4-a234-00a28ded5e8d",
+              "name": "shortContent",
+              "value": "={{ $json.shortContent || ($json.postContent ? $json.postContent.slice(0, 80) + '...' : 'No content') }}",
+              "type": "string"
+            },
+            {
+              "id": "0dca5dec-51aa-4e3d-bb58-10b0562a353a",
+              "name": "approveUrl",
+              "value": "={{ `https://admin.paaair.online/webhook/approval-approve?action=approve&executionId=${$execution.id}&token=${$env.APPROVAL_TOKEN}` }}",
+              "type": "string"
+            },
+            {
+              "id": "df5277b8-1240-4575-a990-f0279d8f777a",
+              "name": "rejectUrl",
+              "value": "={{ `https://admin.paaair.online/webhook/approval-approve?action=reject&executionId=${$execution.id}&token=${$env.APPROVAL_TOKEN}` }}",
+              "type": "string"
+            },
+            {
+              "id": "f7afb89e-3d1d-480b-83b2-1376ed76cf5b",
+              "name": "status",
+              "value": "waiting",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "6a0e60db-7971-43f0-8f62-fbebe4af7add",
+      "name": "Set • Action",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [-800, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v19.0/{{ JSON.parse($('Post to Facebook').item.json.body).id }}/comments",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "message",
+              "value": "=คำถามที่พบบ่อย\nล้างแอร์ใช้เวลานานไหม?\nโดยทั่วไปใช้เวลาประมาณ 30-45 นาทีต่อเครื่อง ขึ้นอยู่กับขนาดและสภาพเครื่อง\nมีบริการเฉพาะพื้นที่สมุทรปราการไหม?\nมีครับ บริการในเขตสมุทรปราการ บางนา บางพลี พระประแดง และใกล้เคียงโดยทีมงาน\nสามารถติดต่อด่วนได้ในวันเดียวไหม?\nสามารถจองคิวด่วนได้หากมีคิวว่างทางโทรศัพท์และ LINE Official\nมีรับประกันหลังบริการไหม?\nมีรับประกันตามประเภทงาน พร้อมตรวจเช็คหลังบริการหากพบปัญหา\n\nติดต่อ\nโทร 084-282-4465(tel:0842824465)\nLINE @paairservice(https://page.line.me/paairservice)\nadmin@paaair.com\nwww.paaair.com"
+            },
+            {
+              "name": "access_token",
+              "value": "={{ $('Prepare Review Data').item.json.pageAccessToken }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "49f9a5d2-8e2e-46d5-8960-c2a70ff15b2e",
+      "name": "Post to Facebook_comment",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-400, 300]
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "1nK-LqBmDUp4iWhiC3vNJWydNgJ5vZZ0VxZpqa-9O_8M",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1747645785,
+          "mode": "list",
+          "cachedResultName": "ReviewQueue",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1nK-LqBmDUp4iWhiC3vNJWydNgJ5vZZ0VxZpqa-9O_8M/edit#gid=1747645785"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "executionId": "={{ $json.executionId }}",
+            "resumeUrl": "={{ $json.resumeUrl }}",
+            "status": "waiting",
+            "createdAt": "={{ $now }}",
+            "token": "={{ $env.APPROVAL_TOKEN }}",
+            "title": "={{ $json.title || 'Default Title' }}",
+            "shortContent": "={{ $json.shortContent || ($json.postContent ? $json.postContent.slice(0, 80) + '...' : 'No content') }}"
+          },
+          "matchingColumns": ["executionId"],
+          "schema": [
+            {
+              "id": "executionId",
+              "displayName": "executionId",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "resumeUrl",
+              "displayName": "resumeUrl",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "createdAt",
+              "displayName": "createdAt",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "token",
+              "displayName": "token",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "title",
+              "displayName": "title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "shortContent",
+              "displayName": "shortContent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "41310337-a872-4203-af2c-fabf40521728",
+      "name": "Append ReviewQueue",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [-600, 300]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "forward-title",
+              "name": "title",
+              "value": "={{ $('Prepare Review Data').item.json.title }}",
+              "type": "string"
+            },
+            {
+              "id": "forward-shortContent",
+              "name": "shortContent",
+              "value": "={{ $('Prepare Review Data').item.json.shortContent }}",
+              "type": "string"
+            },
+            {
+              "id": "forward-executionId",
+              "name": "executionId",
+              "value": "={{ $('Prepare Review Data').item.json.executionId }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "new-forward-node",
+      "name": "Forward Data to Register",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [-1208, 528]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "approval-register",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-register-node",
+      "name": "Webhook • Register",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [-1000, 528],
+      "webhookId": "approval-register-webhook-id"
+    }
+  ],
+  "connections": {
+    "Prepare Review Data": {
+      "main": [
+        [
+          {
+            "node": "Set • Action",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Forward Data to Register",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set • Action": {
+      "main": [
+        [
+          {
+            "node": "Append ReviewQueue",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append ReviewQueue": {
+      "main": [
+        [
+          {
+            "node": "Post to Facebook_comment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Forward Data to Register": {
+      "main": [
+        [
+          {
+            "node": "Webhook • Register",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2025-10-31T16:17:47.278Z",
+  "versionId": "1"
+}
