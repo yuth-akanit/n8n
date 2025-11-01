@@ -27,7 +27,7 @@
         -160
       ],
       "parameters": {
-        "responseBody": "<!doctype html><html lang=\"th\"><meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><meta name=\"robots\" content=\"noindex,nofollow\">\n<body style=\"font-family:sans-serif;padding:24px\">\n  <h3>ยืนยันการอนุมัติโพสต์?</h3>\n  <form method=\"post\" action=\"/approval/approve/confirm\">\n    <input type=\"hidden\" name=\"payload\" value=\"{{ $json.query.payload }}\">\n    <button type=\"submit\" style=\"padding:10px 16px\">✅ ยืนยันอนุมัติ</button>\n  </form>\n</body></html>\n",
+        "responseBody": "<!doctype html><html lang=\"th\"><meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><meta name=\"robots\" content=\"noindex,nofollow\">\n<body style=\"font-family:sans-serif;padding:24px\">\n  <h3>ยืนยันการอนุมัติโพสต์?</h3>\n  <form method=\"post\" action=\"/approval/approve/confirm\">\n    <input type=\"hidden\" name=\"payload\" value=\"{{ $json.query.payload.toString().replace(/\"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;') }}\">\n    <button type=\"submit\" style=\"padding:10px 16px\">✅ ยืนยันอนุมัติ</button>\n  </form>\n</body></html>\n",
         "responseCode": 200,
         "options": {
           "responseHeaders": {
@@ -137,7 +137,7 @@
         320
       ],
       "parameters": {
-        "responseBody": "<!doctype html><html lang=\"th\"><meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><meta name=\"robots\" content=\"noindex,nofollow\">\n<body style=\"font-family:sans-serif;padding:24px\">\n  <h3>ยืนยันการปฏิเสธโพสต์?</h3>\n  <form method=\"post\" action=\"/approval/reject/confirm\">\n    <input type=\"hidden\" name=\"payload\" value=\"{{ $json.query.payload }}\">\n    <button type=\"submit\" style=\"padding:10px 16px\">❌ ยืนยันปฏิเสธ</button>\n  </form>\n</body></html>\n",
+        "responseBody": "<!doctype html><html lang=\"th\"><meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><meta name=\"robots\" content=\"noindex,nofollow\">\n<body style=\"font-family:sans-serif;padding:24px\">\n  <h3>ยืนยันการปฏิเสธโพสต์?</h3>\n  <form method=\"post\" action=\"/approval/reject/confirm\">\n    <input type=\"hidden\" name=\"payload\" value=\"{{ $json.query.payload.toString().replace(/\"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;') }}\">\n    <button type=\"submit\" style=\"padding:10px 16px\">❌ ยืนยันปฏิเสธ</button>\n  </form>\n</body></html>\n",
         "responseCode": 200,
         "options": {
           "responseHeaders": {
