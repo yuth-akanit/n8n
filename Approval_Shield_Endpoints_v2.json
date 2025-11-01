@@ -67,7 +67,7 @@
         80
       ],
       "parameters": {
-        "functionCode": "const payload = $json.body?.payload || $json.query?.payload || '';\nif (!payload) { return [{json:{error:'missing payload'}}]; }\nconst b64 = payload.replace(/-/g,'+').replace(/_/g,'/');\nconst pad = b64.length % 4 ? '='.repeat(4 - (b64.length % 4)) : '';\nconst raw = Buffer.from(b64 + pad, 'base64').toString('utf8');\nconst data = JSON.parse(raw);\nreturn [{ json: { resume: data.resume, approved: true } }];\n"
+        "functionCode": "const payload = $json.body?.payload || $json.query?.payload || '';\nif (!payload) { return [{json:{error:'missing payload'}}]; }\n\ntry {\n  const b64 = payload.replace(/-/g,'+').replace(/_/g,'/');\n  const pad = b64.length % 4 ? '='.repeat(4 - (b64.length % 4)) : '';\n  const raw = Buffer.from(b64 + pad, 'base64').toString('utf8');\n  const data = JSON.parse(raw);\n  \n  if (!data.resume || typeof data.resume !== 'string') {\n    return [{json:{error:'invalid payload: missing or invalid resume URL'}}];\n  }\n  \n  return [{ json: { resume: data.resume, approved: true } }];\n} catch (error) {\n  return [{json:{error:'invalid payload: ' + error.message}}];\n}\n"
       }
     },
     {
@@ -85,7 +85,7 @@
         "responseFormat": "json",
         "sendBody": true,
         "jsonParameters": true,
-        "bodyParametersJson": "={{ { approved: true } }}",
+        "bodyParametersJson": "={{ { approved: $json.approved } }}",
         "headerParametersUi": {
           "parameter": [
             {
@@ -177,7 +177,7 @@
         560
       ],
       "parameters": {
-        "functionCode": "const payload = $json.body?.payload || $json.query?.payload || '';\nif (!payload) { return [{json:{error:'missing payload'}}]; }\nconst b64 = payload.replace(/-/g,'+').replace(/_/g,'/');\nconst pad = b64.length % 4 ? '='.repeat(4 - (b64.length % 4)) : '';\nconst raw = Buffer.from(b64 + pad, 'base64').toString('utf8');\nconst data = JSON.parse(raw);\nreturn [{ json: { resume: data.resume, approved: false } }];\n"
+        "functionCode": "const payload = $json.body?.payload || $json.query?.payload || '';\nif (!payload) { return [{json:{error:'missing payload'}}]; }\n\ntry {\n  const b64 = payload.replace(/-/g,'+').replace(/_/g,'/');\n  const pad = b64.length % 4 ? '='.repeat(4 - (b64.length % 4)) : '';\n  const raw = Buffer.from(b64 + pad, 'base64').toString('utf8');\n  const data = JSON.parse(raw);\n  \n  if (!data.resume || typeof data.resume !== 'string') {\n    return [{json:{error:'invalid payload: missing or invalid resume URL'}}];\n  }\n  \n  return [{ json: { resume: data.resume, approved: false } }];\n} catch (error) {\n  return [{json:{error:'invalid payload: ' + error.message}}];\n}\n"
       }
     },
     {
@@ -195,7 +195,7 @@
         "responseFormat": "json",
         "sendBody": true,
         "jsonParameters": true,
-        "bodyParametersJson": "={{ { approved: false } }}",
+        "bodyParametersJson": "={{ { approved: $json.approved } }}",
         "headerParametersUi": {
           "parameter": [
             {
