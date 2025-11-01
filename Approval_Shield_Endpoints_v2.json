@@ -1,0 +1,315 @@
+{
+  "name": "Approval Shield Endpoints • v2",
+  "nodes": [
+    {
+      "id": "n1",
+      "name": "Approval GET • Approve",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -560,
+        -160
+      ],
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "approval/approve",
+        "responseMode": "responseNode",
+        "options": {}
+      }
+    },
+    {
+      "id": "n2",
+      "name": "Respond HTML • Approve",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 2.1,
+      "position": [
+        -260,
+        -160
+      ],
+      "parameters": {
+        "responseBody": "<!doctype html><html lang=\"th\"><meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><meta name=\"robots\" content=\"noindex,nofollow\">\n<body style=\"font-family:sans-serif;padding:24px\">\n  <h3>ยืนยันการอนุมัติโพสต์?</h3>\n  <form method=\"post\" action=\"/approval/approve/confirm\">\n    <input type=\"hidden\" name=\"payload\" value=\"{{ $json.query.payload }}\">\n    <button type=\"submit\" style=\"padding:10px 16px\">✅ ยืนยันอนุมัติ</button>\n  </form>\n</body></html>\n",
+        "responseCode": 200,
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "text/html; charset=utf-8"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "n3",
+      "name": "Approval POST • ApproveConfirm",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -560,
+        80
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "approval/approve/confirm",
+        "responseMode": "responseNode",
+        "options": {}
+      }
+    },
+    {
+      "id": "n4",
+      "name": "Decode Payload • Approve",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2.1,
+      "position": [
+        -260,
+        80
+      ],
+      "parameters": {
+        "functionCode": "const payload = $json.body?.payload || $json.query?.payload || '';\nif (!payload) { return [{json:{error:'missing payload'}}]; }\nconst b64 = payload.replace(/-/g,'+').replace(/_/g,'/');\nconst pad = b64.length % 4 ? '='.repeat(4 - (b64.length % 4)) : '';\nconst raw = Buffer.from(b64 + pad, 'base64').toString('utf8');\nconst data = JSON.parse(raw);\nreturn [{ json: { resume: data.resume, approved: true } }];\n"
+      }
+    },
+    {
+      "id": "n5",
+      "name": "HTTP • Resume (Approve)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        40,
+        80
+      ],
+      "parameters": {
+        "url": "={{ $json.resume }}",
+        "method": "POST",
+        "responseFormat": "json",
+        "sendBody": true,
+        "jsonParameters": true,
+        "bodyParametersJson": "={{ { approved: true } }}",
+        "headerParametersUi": {
+          "parameter": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "ignoreResponseCode": true
+      }
+    },
+    {
+      "id": "n6",
+      "name": "Respond OK • Approve",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 2.1,
+      "position": [
+        320,
+        80
+      ],
+      "parameters": {
+        "responseBody": "✅ อนุมัติเรียบร้อย",
+        "responseCode": 200
+      }
+    },
+    {
+      "id": "n7",
+      "name": "Approval GET • Reject",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -560,
+        320
+      ],
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "approval/reject",
+        "responseMode": "responseNode",
+        "options": {}
+      }
+    },
+    {
+      "id": "n8",
+      "name": "Respond HTML • Reject",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 2.1,
+      "position": [
+        -260,
+        320
+      ],
+      "parameters": {
+        "responseBody": "<!doctype html><html lang=\"th\"><meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><meta name=\"robots\" content=\"noindex,nofollow\">\n<body style=\"font-family:sans-serif;padding:24px\">\n  <h3>ยืนยันการปฏิเสธโพสต์?</h3>\n  <form method=\"post\" action=\"/approval/reject/confirm\">\n    <input type=\"hidden\" name=\"payload\" value=\"{{ $json.query.payload }}\">\n    <button type=\"submit\" style=\"padding:10px 16px\">❌ ยืนยันปฏิเสธ</button>\n  </form>\n</body></html>\n",
+        "responseCode": 200,
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "text/html; charset=utf-8"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "n9",
+      "name": "Approval POST • RejectConfirm",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -560,
+        560
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "approval/reject/confirm",
+        "responseMode": "responseNode",
+        "options": {}
+      }
+    },
+    {
+      "id": "n10",
+      "name": "Decode Payload • Reject",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2.1,
+      "position": [
+        -260,
+        560
+      ],
+      "parameters": {
+        "functionCode": "const payload = $json.body?.payload || $json.query?.payload || '';\nif (!payload) { return [{json:{error:'missing payload'}}]; }\nconst b64 = payload.replace(/-/g,'+').replace(/_/g,'/');\nconst pad = b64.length % 4 ? '='.repeat(4 - (b64.length % 4)) : '';\nconst raw = Buffer.from(b64 + pad, 'base64').toString('utf8');\nconst data = JSON.parse(raw);\nreturn [{ json: { resume: data.resume, approved: false } }];\n"
+      }
+    },
+    {
+      "id": "n11",
+      "name": "HTTP • Resume (Reject)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        40,
+        560
+      ],
+      "parameters": {
+        "url": "={{ $json.resume }}",
+        "method": "POST",
+        "responseFormat": "json",
+        "sendBody": true,
+        "jsonParameters": true,
+        "bodyParametersJson": "={{ { approved: false } }}",
+        "headerParametersUi": {
+          "parameter": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "ignoreResponseCode": true
+      }
+    },
+    {
+      "id": "n12",
+      "name": "Respond OK • Reject",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 2.1,
+      "position": [
+        320,
+        560
+      ],
+      "parameters": {
+        "responseBody": "❌ ปฏิเสธเรียบร้อย",
+        "responseCode": 200
+      }
+    }
+  ],
+  "connections": {
+    "Approval GET • Approve": {
+      "main": [
+        [
+          {
+            "node": "Respond HTML • Approve",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Approval POST • ApproveConfirm": {
+      "main": [
+        [
+          {
+            "node": "Decode Payload • Approve",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Decode Payload • Approve": {
+      "main": [
+        [
+          {
+            "node": "HTTP • Resume (Approve)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP • Resume (Approve)": {
+      "main": [
+        [
+          {
+            "node": "Respond OK • Approve",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Approval GET • Reject": {
+      "main": [
+        [
+          {
+            "node": "Respond HTML • Reject",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Approval POST • RejectConfirm": {
+      "main": [
+        [
+          {
+            "node": "Decode Payload • Reject",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Decode Payload • Reject": {
+      "main": [
+        [
+          {
+            "node": "HTTP • Resume (Reject)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP • Resume (Reject)": {
+      "main": [
+        [
+          {
+            "node": "Respond OK • Reject",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}
