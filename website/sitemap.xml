@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <!-- Homepage -->
+  <url>
+    <loc>https://www.acrfreezer-samutprakan.com/</loc>
+    <lastmod>2024-12-15</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+  </url>
+
+  <!-- Services Pages -->
+  <url>
+    <loc>https://www.acrfreezer-samutprakan.com/services/</loc>
+    <lastmod>2024-12-15</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
+  </url>
+
+  <url>
+    <loc>https://www.acrfreezer-samutprakan.com/services/air-conditioner-repair/</loc>
+    <lastmod>2024-12-15</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
+  </url>
+
+  <url>
+    <loc>https://www.acrfreezer-samutprakan.com/services/air-conditioner-cleaning/</loc>
+    <lastmod>2024-12-15</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
+  </url>
+
+  <url>
+    <loc>https://www.acrfreezer-samutprakan.com/services/freezer-service/</loc>
+    <lastmod>2024-12-15</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
+  </url>
+
+  <!-- Blog Pages -->
+  <url>
+    <loc>https://www.acrfreezer-samutprakan.com/blog/</loc>
+    <lastmod>2024-12-15</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <url>
+    <loc>https://www.acrfreezer-samutprakan.com/blog/rainy-season-ac-care/</loc>
+    <lastmod>2024-12-15</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <url>
+    <loc>https://www.acrfreezer-samutprakan.com/blog/hot-season-tips/</loc>
+    <lastmod>2024-12-15</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <url>
+    <loc>https://www.acrfreezer-samutprakan.com/blog/ac-maintenance-guide/</loc>
+    <lastmod>2024-12-15</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <url>
+    <loc>https://www.acrfreezer-samutprakan.com/blog/freezer-maintenance-tips/</loc>
+    <lastmod>2024-12-15</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <url>
+    <loc>https://www.acrfreezer-samutprakan.com/blog/common-ac-problems-solutions/</loc>
+    <lastmod>2024-12-15</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <url>
+    <loc>https://www.acrfreezer-samutprakan.com/blog/ac-repair-cost-comparison/</loc>
+    <lastmod>2024-12-15</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <!-- Area Pages -->
+  <url>
+    <loc>https://www.acrfreezer-samutprakan.com/areas/</loc>
+    <lastmod>2024-12-15</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <url>
+    <loc>https://www.acrfreezer-samutprakan.com/areas/bang-phli-ac-service/</loc>
+    <lastmod>2024-12-15</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+
+  <url>
+    <loc>https://www.acrfreezer-samutprakan.com/areas/phra-pradaeng-freezer-service/</loc>
+    <lastmod>2024-12-15</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+
+  <!-- Contact & Other -->
+  <url>
+    <loc>https://www.acrfreezer-samutprakan.com/contact/</loc>
+    <lastmod>2024-12-15</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+
+  <url>
+    <loc>https://www.acrfreezer-samutprakan.com/privacy/</loc>
+    <lastmod>2024-12-15</lastmod>
+    <changefreq>yearly</changefreq>
+    <priority>0.5</priority>
+  </url>
+
+  <url>
+    <loc>https://www.acrfreezer-samutprakan.com/terms/</loc>
+    <lastmod>2024-12-15</lastmod>
+    <changefreq>yearly</changefreq>
+    <priority>0.5</priority>
+  </url>
+</urlset>

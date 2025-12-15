@@ -1,0 +1,34 @@
+# robots.txt for AC & Freezer Service Samut Prakan
+# Last updated: 2024-12-15
+
+# Allow all search engines
+User-agent: *
+Allow: /
+
+# Disallow private/admin pages (if any)
+Disallow: /admin/
+Disallow: /private/
+Disallow: /temp/
+Disallow: /test/
+
+# Sitemap
+Sitemap: https://www.acrfreezer-samutprakan.com/sitemap.xml
+
+# Specific rules for Googlebot
+User-agent: Googlebot
+Allow: /
+Crawl-delay: 0
+
+# Crawl delay for other bots (optional)
+User-agent: *
+Crawl-delay: 1
+
+# Block bad bots
+User-agent: MJ12bot
+Disallow: /
+
+User-agent: AhrefsBot
+Disallow: /
+
+User-agent: SemrushBot
+Crawl-delay: 10

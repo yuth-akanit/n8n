@@ -1,0 +1,212 @@
+{
+  "meta": {
+    "version": "1.0",
+    "lastUpdated": "2024-12-15",
+    "language": "Thai",
+    "description": "Complete keyword mapping for AC & Freezer Service Samut Prakan"
+  },
+
+  "primaryKeywords": {
+    "services": [
+      {
+        "keyword": "ซ่อมแอร์",
+        "searchVolume": "high",
+        "difficulty": "medium",
+        "pages": ["/services/air-conditioner-repair/", "/"],
+        "priority": 1
+      },
+      {
+        "keyword": "ล้างแอร์",
+        "searchVolume": "high",
+        "difficulty": "medium",
+        "pages": ["/services/air-conditioner-cleaning/", "/"],
+        "priority": 1
+      },
+      {
+        "keyword": "บริการตู้แช่",
+        "searchVolume": "medium",
+        "difficulty": "medium",
+        "pages": ["/services/freezer-service/", "/"],
+        "priority": 2
+      },
+      {
+        "keyword": "บริการตู้เย็น",
+        "searchVolume": "medium",
+        "difficulty": "medium",
+        "pages": ["/services/freezer-service/", "/"],
+        "priority": 2
+      }
+    ],
+
+    "local": [
+      {
+        "keyword": "ซ่อมแอร์ สมุทรปราการ",
+        "searchVolume": "high",
+        "difficulty": "medium",
+        "pages": ["/", "/services/air-conditioner-repair/"],
+        "priority": 1
+      },
+      {
+        "keyword": "ล้างแอร์ สมุทรปราการ",
+        "searchVolume": "high",
+        "difficulty": "medium",
+        "pages": ["/", "/services/air-conditioner-cleaning/"],
+        "priority": 1
+      },
+      {
+        "keyword": "ช่างแอร์ใกล้ฉัน สมุทรปราการ",
+        "searchVolume": "high",
+        "difficulty": "low",
+        "pages": ["/", "/services/"],
+        "priority": 1
+      },
+      {
+        "keyword": "บริการตู้แช่ สมุทรปราการ",
+        "searchVolume": "medium",
+        "difficulty": "medium",
+        "pages": ["/services/freezer-service/", "/"],
+        "priority": 2
+      }
+    ],
+
+    "longTail": [
+      {
+        "keyword": "แอร์ไม่เย็นสู้ร้อน ซ่อมเร็ว สมุทรปราการ",
+        "searchVolume": "low",
+        "difficulty": "low",
+        "pages": ["/services/air-conditioner-repair/", "/blog/hot-season-tips/"],
+        "priority": 3
+      },
+      {
+        "keyword": "ล้างแอร์หน้าฝนป้องกันเชื้อรา",
+        "searchVolume": "low",
+        "difficulty": "low",
+        "pages": ["/blog/rainy-season-ac-care/"],
+        "priority": 3
+      },
+      {
+        "keyword": "เช่นว่างแอร์จากด้านหน้า บ้านธรรมชาติ",
+        "searchVolume": "low",
+        "difficulty": "low",
+        "pages": ["/blog/ac-maintenance/"],
+        "priority": 3
+      },
+      {
+        "keyword": "ตู้แช่ไม่เย็นน้ำแข็งเกาะซ่อม",
+        "searchVolume": "low",
+        "difficulty": "low",
+        "pages": ["/services/freezer-service/"],
+        "priority": 3
+      }
+    ],
+
+    "seasonal": {
+      "hotSeason": [
+        {
+          "keyword": "ล้างแอร์หน้าร้อน สมุทรปราการ",
+          "period": "มีนาคม-พฤษภาคม",
+          "pages": ["/blog/hot-season-tips/"],
+          "priority": 1
+        },
+        {
+          "keyword": "แอร์ไม่เย็นสู้ร้อน",
+          "period": "เมษายน-พฤษภาคม",
+          "pages": ["/services/air-conditioner-repair/"],
+          "priority": 2
+        }
+      ],
+      "rainySeason": [
+        {
+          "keyword": "ล้างแอร์หน้าฝนป้องกันเชื้อรา",
+          "period": "พฤษภาคม-ตุลาคม",
+          "pages": ["/blog/rainy-season-ac-care/"],
+          "priority": 1
+        },
+        {
+          "keyword": "แอร์มีกลิ่นอับหน้าฝน",
+          "period": "มิถุนายน-กันยายน",
+          "pages": ["/services/air-conditioner-cleaning/"],
+          "priority": 2
+        }
+      ]
+    },
+
+    "byArea": {
+      "bangPhli": [
+        {
+          "keyword": "ซ่อมแอร์ บางพลี",
+          "pages": ["/areas/bang-phli-ac-service/"],
+          "priority": 2
+        },
+        {
+          "keyword": "ล้างแอร์ บางพลี",
+          "pages": ["/areas/bang-phli-ac-service/"],
+          "priority": 2
+        }
+      ],
+      "phraPradaeng": [
+        {
+          "keyword": "บริการตู้แช่ พระประแดง",
+          "pages": ["/areas/phra-pradaeng-freezer-service/"],
+          "priority": 2
+        },
+        {
+          "keyword": "ซ่อมแอร์ พระประแดง",
+          "pages": ["/areas/phra-pradaeng-freezer-service/"],
+          "priority": 2
+        }
+      ],
+      "otherAreas": [
+        {
+          "keyword": "ช่างแอร์ บางบ่อ",
+          "pages": ["/areas/"],
+          "priority": 3
+        },
+        {
+          "keyword": "บริการแอร์ บางเสาธง",
+          "pages": ["/areas/"],
+          "priority": 3
+        }
+      ]
+    }
+  },
+
+  "secondaryKeywords": {
+    "competitorAnalysis": [
+      {
+        "keyword": "ช่างซ่อมแอร์",
+        "competitorLevel": "high",
+        "notes": "Highly competitive, target long-tail variants"
+      },
+      {
+        "keyword": "บริการแอร์คุณภาพ",
+        "competitorLevel": "medium",
+        "notes": "Medium competition, good opportunity for branded content"
+      }
+    ],
+
+    "relatedSearches": [
+      "แอร์ไม่เย็น",
+      "เติมน้ำยาแอร์",
+      "น้ำหยดจากแอร์",
+      "ติดตั้งแอร์",
+      "ประหยัดไฟแอร์"
+    ]
+  },
+
+  "negativeKeywords": [
+    "ซ่อมแอร์ฟรี",
+    "แอร์เก่า",
+    "ขายแอร์มือสอง",
+    "บ้านไม่มีแอร์"
+  ],
+
+  "voiceSearchOptimization": {
+    "phrases": [
+      "ช่างแอร์ใกล้ฉันเลย",
+      "ต้องล้างแอร์กี่เดือน",
+      "แอร์ไม่เย็นแก้ไขอย่างไร",
+      "นัดหมายซ่อมแอร์ได้ไหม"
+    ]
+  }
+}
