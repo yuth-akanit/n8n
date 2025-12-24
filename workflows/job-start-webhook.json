@@ -1,0 +1,542 @@
+{
+  "name": "Job Start Webhook (PA Cooling Services)",
+  "nodes": [
+    {
+      "parameters": {
+        "fields": {
+          "values": [
+            {
+              "name": "line_message",
+              "stringValue": "={{(() => {\n  const ev = $json.meta?.job_start || {};          // จาก booking_events\n  const b  = $json.raw_booking || $json || {};     // เผื่อคุณส่ง booking row มาด้วย\n  const payload = b.payload || {};\n  const js = payload.job_start || {};\n  const loc = js.location || $json.location || {};\n  const lat = loc.lat ?? loc.latitude ?? '';\n  const lng = loc.lng ?? loc.longitude ?? '';\n\n  const qno = b.queue_number || $json.queue_number || $json.job_number || '-';\n  const techName = (js.technician?.technician_name)\n    || ($json.technician?.technician_name)\n    || b.assigned_technician\n    || '-';\n  const startedAt = js.started_at || $json.started_at || '-';\n\n  const addr = ev.address_full || payload.address_full || b.address_full || '';\n  const jobType = ev.job_type || b.service_type || '-';\n  const unitCount = ev.unit_count ?? payload.unit_count ?? '';\n\n  const map = (lat && lng) ? `https://maps.google.com/?q=${lat},${lng}` : '-';\n\n  const lines = [\n    `🟢 เริ่มงาน`,\n    `คิว: ${qno}`,\n    `ช่าง: ${techName}`,\n    `เวลา: ${startedAt}`,\n    `งาน: ${jobType}${unitCount !== '' ? ` | ${unitCount} เครื่อง` : ''}`,\n    addr ? `ที่อยู่/หมายเหตุ:\\n${addr}` : null,\n    `แผนที่: ${map}`\n  ].filter(Boolean);\n\n  return { type: \"text\", text: lines.join(\"\\n\") };\n})()}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "1c4078cf-6cb8-4080-93ae-5847c789e1a4",
+      "name": "Build LINE message",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [1072, 608]
+    },
+    {
+      "parameters": {
+        "operation": "send",
+        "to": "={{ 'C3c85d15973e816ded98a753949e0257f' }}",
+        "messages": {
+          "values": [
+            {
+              "text": "={{$json.line_message}}"
+            }
+          ]
+        }
+      },
+      "id": "19d2f31f-cbdc-4788-a38e-174072a11002",
+      "name": "LINE Push (Admin Group)",
+      "type": "@aotoki/n8n-nodes-line-messaging.lineMessaging",
+      "typeVersion": 1,
+      "position": [1296, 608],
+      "credentials": {
+        "lineMessagingApi": {
+          "id": "F0w10rTl95F0dij9",
+          "name": "ห้องคิวงาน"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { success: true, action: 'job_started', booking_id: $json.booking_id, job_number: $json.job_number, queue_number: $json.queue_number, started_at: $json.meta.started_at } }}",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "content-type",
+                "value": "application/json; charset=utf-8"
+              },
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              },
+              {
+                "name": "Access-Control-Allow-Methods",
+                "value": "GET, POST, OPTIONS"
+              },
+              {
+                "name": "Access-Control-Allow-Headers",
+                "value": "Content-Type, Authorization"
+              },
+              {
+                "name": "Cache-Control",
+                "value": "no-cache, no-store, must-revalidate"
+              }
+            ]
+          }
+        }
+      },
+      "id": "0bbd9e35-d317-4ac7-befc-f12f9cfb64b3",
+      "name": "Respond OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [1520, 608]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "job-start",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "8203020b-bea1-43a2-a311-d7d014ca41bb",
+      "name": "LIFF Webhook (job-start)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [-720, 512],
+      "webhookId": "76ffb44b-ced0-4981-b8e8-053931150b2b"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Normalize LIFF Job Start payload\n// OUT: { booking_id, updates, original, event }\n\nreturn items.map(item => {\n  const body = item.json.body || item.json || {};\n\n  const bookingId  = body.booking_id || null;\n  const jobNumber  = body.job_number || null;\n  const queueNo    = body.queue_number || jobNumber || null;\n\n  const nowIso = new Date().toISOString();\n  const startedAt = body.summary?.work_start_time || body.started_at || body.meta?.submitted_at || nowIso;\n\n  const tech = body.technician || null;\n  const gps  = body.location || null;\n\n  const jobStart = {\n    started_at: startedAt,\n    technician: tech,\n    location: gps,\n    meta: {\n      ...(body.meta || {}),\n      liff_source: (body.meta?.liff_source || 'job_start'),\n      submitted_at: (body.meta?.submitted_at || nowIso)\n    }\n  };\n\n  // merge payload\n  const basePayload = (body.raw_booking && body.raw_booking.payload) ? body.raw_booking.payload : (body.payload || {});\n  const payloadForRow = {\n    ...basePayload,\n    job_start: jobStart\n  };\n\n  const updates = {\n    status: 'working',\n    payload: payloadForRow\n  };\n\n  const eventMeta = {\n    job_number: jobNumber,\n    queue_number: queueNo,\n    job_type: basePayload?.job_type || basePayload?.jobType || null,\n    started_at: startedAt,\n    gps: gps || {},\n    liff_source: jobStart.meta.liff_source,\n    submitted_at: jobStart.meta.submitted_at\n  };\n\n  return {\n    json: {\n      booking_id: bookingId,\n      job_number: jobNumber,\n      queue_number: queueNo,\n      technician: tech,\n      started_at: startedAt,\n      updates,\n      event: {\n        booking_id: bookingId,\n        action: 'job_start_submitted',\n        actor: tech?.technician_name || tech?.displayName || 'technician',\n        reason: 'working',\n        meta: eventMeta\n      },\n      original: body\n    }\n  };\n});\n"
+      },
+      "id": "8b703140-11e2-4997-92e6-8694cfc9d5b5",
+      "name": "Normalize Start Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-272, 512]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "cond-booking",
+              "leftValue": "={{$json.booking_id}}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "6d6dc38a-38ae-4663-9c67-cbcccccae251",
+      "name": "Has booking_id?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [-48, 512]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ $('config').item.json.url+ '/rest/v1/bookings'}}",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "id",
+              "value": "=eq.{{$json.booking_id}}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $('config').item.json.apikey }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "={{ $('config').item.json.Authorization }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=representation"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{$json.updates}}",
+        "options": {}
+      },
+      "id": "af12bb42-25cf-455d-87f6-d47d83898949",
+      "name": "Update bookings (working + payload.job_start)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [624, 608]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('config').item.json.url+ '/rest/v1/booking_events'}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $('config').item.json.apikey }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "={{ $('config').item.json.Authorization }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=representation"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{({\n  booking_id: $json.booking_id,\n  action: \"job_start_submitted\",\n    started_at: $json.started_at,\n    location: $json.location,\n  meta: {\n    job_start: {\n      started_at: $json.started_at,\n      technician: $json.technician,\n      location: $json.original?.location || $json.location,\n      job_number: $json.job_number,\n      queue_number: $json.queue_number,\n      meta: $json.original?.meta || null\n    }\n  }\n})}}",
+        "options": {}
+      },
+      "id": "8c8fc5a1-7ebd-4075-80b0-5c097f54d36b",
+      "name": "Insert booking_events (job_start_submitted)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [848, 608]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "22a64aee-9f16-4378-9937-3df81f1247f1",
+              "name": "apikey",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpla2t2d2RlanhyeWVpaWloZmN5Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MTI5NjA2NiwiZXhwIjoyMDc2ODcyMDY2fQ.ebna9rP7lLKJrjq7jV5kwQzHMw31O6EULM9GQ7T1SQo",
+              "type": "string"
+            },
+            {
+              "id": "d4914c69-e230-436f-9cff-e77906243ca7",
+              "name": "Authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpla2t2d2RlanhyeWVpaWloZmN5Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MTI5NjA2NiwiZXhwIjoyMDc2ODcyMDY2fQ.ebna9rP7lLKJrjq7jV5kwQzHMw31O6EULM9GQ7T1SQo",
+              "type": "string"
+            },
+            {
+              "id": "ec127937-37af-41cf-bc4f-3499fd377e83",
+              "name": "url",
+              "value": "https://zekkvwdejxryeiiihfcy.supabase.co",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [-496, 512],
+      "id": "96fe3ef5-de18-4270-9d51-01201f75305d",
+      "name": "config"
+    },
+    {
+      "parameters": {
+        "url": "={{ $('config').item.json.url + '/rest/v1/booking_events' }}",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "select",
+              "value": "id"
+            },
+            {
+              "name": "booking_id",
+              "value": "=eq.{{$json.booking_id}}"
+            },
+            {
+              "name": "action",
+              "value": "eq.job_start_submitted"
+            },
+            {
+              "name": "limit",
+              "value": "1"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $('config').item.json.apikey }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "={{ $('config').item.json.Authorization }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "f44221a6-62ef-4f89-af60-9e0a15b86af1",
+      "name": "Idempotency",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [176, 512],
+      "alwaysOutputData": true,
+      "notes": "✅ แก้ไข: เปิด alwaysOutputData เพื่อให้ส่งต่อข้อมูลแม้ได้ [] (array ว่าง)"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{({\n  success: true,\n  action: \"already_started\",\n  booking_id: $('Normalize Start Data').item.json.booking_id,\n  job_number: $('Normalize Start Data').item.json.job_number,\n  queue_number: $('Normalize Start Data').item.json.queue_number,\n  next: { screen: \"jobclose\" }\n})}}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json; charset=utf-8"
+              },
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              },
+              {
+                "name": "Access-Control-Allow-Methods",
+                "value": "GET, POST, OPTIONS"
+              },
+              {
+                "name": "Access-Control-Allow-Headers",
+                "value": "Content-Type, Authorization"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [624, 416],
+      "id": "8529e77e-5f54-4cad-9851-376e47803e8f",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "c91a272c-a3d3-47ea-addb-4d57fe78a167",
+              "leftValue": "={{ $items().length }}\n",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [400, 512],
+      "id": "1af16339-cb4d-45be-a4ce-c284dbbf8dad",
+      "name": "Already started?"
+    }
+  ],
+  "connections": {
+    "Build LINE message": {
+      "main": [
+        [
+          {
+            "node": "LINE Push (Admin Group)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LINE Push (Admin Group)": {
+      "main": [
+        [
+          {
+            "node": "Respond OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LIFF Webhook (job-start)": {
+      "main": [
+        [
+          {
+            "node": "config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Start Data": {
+      "main": [
+        [
+          {
+            "node": "Has booking_id?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has booking_id?": {
+      "main": [
+        [
+          {
+            "node": "Idempotency",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update bookings (working + payload.job_start)": {
+      "main": [
+        [
+          {
+            "node": "Insert booking_events (job_start_submitted)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert booking_events (job_start_submitted)": {
+      "main": [
+        [
+          {
+            "node": "Build LINE message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "config": {
+      "main": [
+        [
+          {
+            "node": "Normalize Start Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Idempotency": {
+      "main": [
+        [
+          {
+            "node": "Already started?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Already started?": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Update bookings (working + payload.job_start)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {
+    "LIFF Webhook (job-start)": [
+      {
+        "headers": {
+          "host": "admin.paaair.online",
+          "user-agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 Safari Line/15.20.4 LIFF",
+          "content-length": "504",
+          "accept": "*/*",
+          "accept-encoding": "gzip, deflate, br",
+          "accept-language": "th-TH,th;q=0.9",
+          "content-type": "application/json; charset=utf-8",
+          "origin": "https://paaair.online",
+          "priority": "u=3, i",
+          "referer": "https://paaair.online/",
+          "sec-fetch-dest": "empty",
+          "sec-fetch-mode": "cors",
+          "sec-fetch-site": "same-site",
+          "via": "2.0 Caddy",
+          "x-forwarded-for": "49.49.224.139",
+          "x-forwarded-host": "admin.paaair.online",
+          "x-forwarded-proto": "https"
+        },
+        "params": {},
+        "query": {},
+        "body": {
+          "action": "job_start_submitted",
+          "booking_id": "07ec021e-b6d0-4b1a-8964-8a9f17e803f2",
+          "job_number": "PA-2025-12-00007",
+          "started_at": "2025-12-24T21:56:07.588Z",
+          "technician": {
+            "technician_line_id": "Ufcb73f1eb6ff4547718a1a4784d04141",
+            "technician_name": "Akanit P."
+          },
+          "location": {
+            "lat": 13.628895148078154,
+            "lng": 100.77155777448245
+          },
+          "summary": {
+            "unit_planned": 4,
+            "work_start_time": "2025-12-24T21:56:07.588Z"
+          },
+          "meta": {
+            "liff_source": "job_start_screen",
+            "submitted_at": "2025-12-24T21:56:07.588Z",
+            "version": "jobstart-1.0"
+          }
+        },
+        "webhookUrl": "https://admin.paaair.online/webhook/job-start",
+        "executionMode": "production"
+      }
+    ]
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "50b9398667fecef5231b900714a0997b8e87996f58727cad5427170a677b0267"
+  },
+  "tags": []
+}
