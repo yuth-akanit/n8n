@@ -420,16 +420,218 @@ curl -X POST https://your-n8n-instance/webhook/job-start \
 
 ---
 
-## 9. การอัพเดตในอนาคต
+## 9. Job Close Payload Structure
 
-- [ ] เพิ่ม webhook สำหรับ job_close
-- [ ] เพิ่มการส่ง photo/signature
-- [ ] เพิ่มการคำนวณระยะเวลาทำงาน
+### 9.1 ข้อมูลการปิดงาน (Job Close Payload)
+
+```typescript
+interface JobClosePayload {
+  action: 'job_close_submitted';
+  booking_id: string;
+  job_number: string;
+  technician: Technician;
+  status_action: 'done' | 'cancelled';
+  summary: JobSummary;
+  payment: PaymentInfo;
+  checklist: Checklist;
+  issue: string;
+  note_internal: string;
+  media: MediaInfo;
+  location: Location;
+  customer_feedback: CustomerFeedback;
+  closed_at: string;  // ISO 8601 timestamp
+  meta: {
+    liff_source: string;
+    submitted_at: string;
+    version: number;
+  };
+  original: {
+    service_type: string;
+    booking_date: string;
+  };
+}
+```
+
+### 9.2 รายละเอียดการทำงาน (Job Summary)
+
+```typescript
+interface JobSummary {
+  service_type: string;        // เช่น "ล้างแอร์", "ซ่อมแอร์"
+  job_detail: string;          // รายละเอียดงาน
+  unit_planned: number;        // จำนวนเครื่องที่วางแผน
+  unit_done: number;           // จำนวนเครื่องที่ทำเสร็จ
+  work_start_time: string;     // ISO 8601 timestamp
+  work_end_time: string;       // ISO 8601 timestamp
+}
+```
+
+### 9.3 ข้อมูลการชำระเงิน (Payment Info)
+
+```typescript
+interface PaymentInfo {
+  total_price: number;         // ราคารวม (ก่อนหัก)
+  net_price: number;           // ราคาสุทธิ
+  payment_method: 'cash' | 'transfer' | 'credit';
+  cash_received?: number;      // เงินสดที่รับ (ถ้า payment_method = cash)
+  transfer_amount?: number;    // ยอดโอน (ถ้า payment_method = transfer)
+  slip_url?: string | null;    // URL รูปสลิปโอนเงิน
+}
+```
+
+### 9.4 รายการตรวจสอบ (Checklist)
+
+```typescript
+interface Checklist {
+  test_run_ok: boolean;        // ทดสอบเครื่องแล้ว OK หรือไม่
+  test_run_note: string;       // หมายเหตุการทดสอบ
+}
+```
+
+### 9.5 ข้อมูลสื่อ (Media Info)
+
+```typescript
+interface MediaInfo {
+  photo_urls: string[];        // URLs ของรูปภาพที่อัปโหลดแล้ว (S3)
+  // สำหรับการส่งรูปใหม่ ใช้ images[] (ดูตัวอย่างด้านล่าง)
+}
+
+// สำหรับการส่งรูปภาพใหม่ (base64)
+interface ImageUpload {
+  base64: string;              // data:image/jpeg;base64,/9j/4AAQ...
+  filename: string;            // เช่น "photo_1.jpg"
+  contentType: string;         // เช่น "image/jpeg"
+}
+```
+
+### 9.6 ความคิดเห็นลูกค้า (Customer Feedback)
+
+```typescript
+interface CustomerFeedback {
+  rating: number;              // 1-5 ดาว
+  allow_photo_use: boolean;    // อนุญาตให้ใช้รูปหรือไม่
+  comment: string;             // ความคิดเห็นเพิ่มเติม
+}
+```
+
+### 9.7 ตัวอย่าง Webhook Payload (Job Close)
+
+```json
+{
+  "action": "job_close_submitted",
+  "booking_id": "72484ffa-0ddc-468a-853f-bb0810192aef",
+  "job_number": "PA-2025-12-00029",
+  "technician": {
+    "technician_line_id": "Ufcb73f1eb6ff4547718a1a4784d04141",
+    "technician_name": "Akanit P."
+  },
+  "status_action": "done",
+  "summary": {
+    "service_type": "ล้างแอร์",
+    "job_detail": "",
+    "unit_planned": 1,
+    "unit_done": 1,
+    "work_start_time": "2025-12-24T21:50:43.744Z",
+    "work_end_time": "2025-12-24T21:51:47.578Z"
+  },
+  "payment": {
+    "total_price": 0,
+    "net_price": 0,
+    "payment_method": "cash",
+    "cash_received": 0,
+    "transfer_amount": 0,
+    "slip_url": null
+  },
+  "checklist": {
+    "test_run_ok": true,
+    "test_run_note": ""
+  },
+  "issue": "",
+  "note_internal": "",
+  "media": {
+    "photo_urls": []
+  },
+  "images": [
+    {
+      "base64": "data:image/jpeg;base64,/9j/4AAQSkZJRg...",
+      "filename": "photo_1.jpg",
+      "contentType": "image/jpeg"
+    }
+  ],
+  "location": {
+    "lat": 13.628895141630148,
+    "lng": 100.77155779707954
+  },
+  "customer_feedback": {
+    "rating": 5,
+    "allow_photo_use": true,
+    "comment": ""
+  },
+  "closed_at": "2025-12-24T21:51:47.578Z",
+  "meta": {
+    "liff_source": "job_close",
+    "submitted_at": "2025-12-24T21:51:47.578Z",
+    "version": 2.8
+  },
+  "original": {
+    "service_type": "ล้าง",
+    "booking_date": "2025-12-30"
+  }
+}
+```
+
+### 9.8 Response Format (Success)
+
+```json
+{
+  "success": true,
+  "action": "job_closed",
+  "booking_id": "72484ffa-0ddc-468a-853f-bb0810192aef",
+  "job_number": "PA-2025-12-00029",
+  "closed_at": "2025-12-24T21:51:47.578Z",
+  "photo_urls": [
+    "https://s3.paaair.online/job-close-data/image-workjobs/PA-2025-12-00029/1703462307_photo_1.jpg"
+  ]
+}
+```
+
+---
+
+## 10. S3/MinIO Image Upload
+
+**ปัญหาเดิม:** LIFF app พยายาม upload รูปไปที่ S3 โดยตรง → ได้ AccessDenied error
+
+**วิธีแก้ปัจจุบัน:**
+1. LIFF ส่งรูปเป็น base64 ใน webhook payload
+2. n8n workflow รับรูป → upload ไปที่ S3 ด้วย credentials ที่ถูกต้อง
+3. n8n ส่ง public URLs กลับให้ LIFF
+4. บันทึก URLs ลงฐานข้อมูล Supabase
+
+**S3 Structure:**
+```
+s3://job-close-data/
+  └── image-workjobs/
+      └── PA-2025-12-00029/
+          ├── 1703462307_photo_1.jpg
+          ├── 1703462308_photo_2.jpg
+          └── 1703462309_signature.jpg
+```
+
+**ดูรายละเอียดเพิ่มเติม:** `/docs/S3_UPLOAD_FIX.md`
+
+---
+
+## 11. การอัพเดตในอนาคต
+
+- [x] เพิ่ม webhook สำหรับ job_close ✅
+- [x] เพิ่มการส่ง photo/signature ✅
+- [x] เพิ่มการคำนวณระยะเวลาทำงาน ✅
 - [ ] เพิ่ม dashboard สำหรับดูสถานะงาน
 - [ ] เพิ่ม notification แบบ real-time
+- [ ] เพิ่ม PDF report generation
+- [ ] เพิ่มการส่งใบเสร็จให้ลูกค้า
 
 ---
 
 **Last Updated:** 2025-12-24
-**Version:** 1.0.0
+**Version:** 2.0.0
 **Author:** PA Cooling Services Development Team

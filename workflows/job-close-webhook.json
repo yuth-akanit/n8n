@@ -1,0 +1,532 @@
+{
+  "name": "Job Close Webhook (PA Cooling Services)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "job-close",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-job-close",
+      "name": "LIFF Webhook (job-close)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [-720, 512],
+      "webhookId": "job-close-webhook-001"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "supabase-apikey",
+              "name": "supabase_apikey",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpla2t2d2RlanhyeWVpaWloZmN5Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MTI5NjA2NiwiZXhwIjoyMDc2ODcyMDY2fQ.ebna9rP7lLKJrjq7jV5kwQzHMw31O6EULM9GQ7T1SQo",
+              "type": "string"
+            },
+            {
+              "id": "supabase-auth",
+              "name": "supabase_authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpla2t2d2RlanhyeWVpaWloZmN5Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MTI5NjA2NiwiZXhwIjoyMDc2ODcyMDY2fQ.ebna9rP7lLKJrjq7jV5kwQzHMw31O6EULM9GQ7T1SQo",
+              "type": "string"
+            },
+            {
+              "id": "supabase-url",
+              "name": "supabase_url",
+              "value": "https://zekkvwdejxryeiiihfcy.supabase.co",
+              "type": "string"
+            },
+            {
+              "id": "s3-endpoint",
+              "name": "s3_endpoint",
+              "value": "https://s3.paaair.online",
+              "type": "string"
+            },
+            {
+              "id": "s3-bucket",
+              "name": "s3_bucket",
+              "value": "job-close-data",
+              "type": "string"
+            },
+            {
+              "id": "s3-access-key",
+              "name": "s3_access_key",
+              "value": "YOUR_S3_ACCESS_KEY",
+              "type": "string"
+            },
+            {
+              "id": "s3-secret-key",
+              "name": "s3_secret_key",
+              "value": "YOUR_S3_SECRET_KEY",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [-496, 512],
+      "id": "config-node",
+      "name": "Config"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Normalize Job Close Payload and Extract Images\n// Handles both base64 images and URLs\n\nconst items = $input.all();\nconst results = [];\n\nfor (const item of items) {\n  const body = item.json.body || item.json || {};\n  \n  const bookingId = body.booking_id || null;\n  const jobNumber = body.job_number || null;\n  const queueNo = body.queue_number || jobNumber || null;\n  const tech = body.technician || null;\n  const statusAction = body.status_action || 'done';\n  \n  const nowIso = new Date().toISOString();\n  const closedAt = body.closed_at || body.summary?.work_end_time || nowIso;\n  \n  // Extract job close data\n  const jobClose = {\n    status_action: statusAction,\n    closed_at: closedAt,\n    summary: body.summary || {},\n    payment: body.payment || {},\n    checklist: body.checklist || {},\n    issue: body.issue || '',\n    note_internal: body.note_internal || '',\n    location: body.location || {},\n    customer_feedback: body.customer_feedback || {},\n    media: body.media || { photo_urls: [] },\n    meta: {\n      ...(body.meta || {}),\n      liff_source: (body.meta?.liff_source || 'job_close'),\n      submitted_at: (body.meta?.submitted_at || nowIso)\n    }\n  };\n  \n  // Extract images for upload (if any base64 images exist)\n  const images = [];\n  if (body.images && Array.isArray(body.images)) {\n    for (let i = 0; i < body.images.length; i++) {\n      const img = body.images[i];\n      if (img.base64) {\n        images.push({\n          index: i,\n          base64: img.base64,\n          filename: img.filename || `photo_${i + 1}.jpg`,\n          contentType: img.contentType || 'image/jpeg'\n        });\n      } else if (img.url) {\n        // Already uploaded, just keep the URL\n        jobClose.media.photo_urls.push(img.url);\n      }\n    }\n  }\n  \n  results.push({\n    json: {\n      booking_id: bookingId,\n      job_number: jobNumber,\n      queue_number: queueNo,\n      technician: tech,\n      closed_at: closedAt,\n      status_action: statusAction,\n      job_close: jobClose,\n      images_to_upload: images,\n      has_images: images.length > 0,\n      original: body\n    }\n  });\n}\n\nreturn results;"
+      },
+      "id": "normalize-data",
+      "name": "Normalize Close Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-272, 512]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "check-booking-id",
+              "leftValue": "={{$json.booking_id}}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-booking",
+      "name": "Has booking_id?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [-48, 512]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "check-has-images",
+              "leftValue": "={{$json.has_images}}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-images",
+      "name": "Has Images to Upload?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [176, 512]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Upload images to S3/MinIO\n// This node handles S3 uploads using AWS SDK compatible API\n\nconst items = $input.all();\nconst config = $('Config').first().json;\nconst results = [];\n\nfor (const item of items) {\n  const images = item.json.images_to_upload || [];\n  const uploadedUrls = [...(item.json.job_close?.media?.photo_urls || [])];\n  \n  // For each image, we need to upload to S3\n  // In n8n, you would typically use the HTTP Request node with AWS Signature\n  // For now, we'll prepare the data for the next node\n  \n  for (const img of images) {\n    const timestamp = Date.now();\n    const jobNumber = item.json.job_number || 'unknown';\n    const sanitizedJobNumber = jobNumber.replace(/[^a-zA-Z0-9-]/g, '_');\n    const s3Key = `image-workjobs/${sanitizedJobNumber}/${timestamp}_${img.filename}`;\n    \n    // Store image data for S3 upload node\n    // The actual upload will be done by HTTP Request node with AWS signature\n    results.push({\n      json: {\n        ...item.json,\n        current_image: {\n          base64: img.base64,\n          s3_key: s3Key,\n          content_type: img.contentType,\n          bucket: config.s3_bucket,\n          endpoint: config.s3_endpoint,\n          public_url: `${config.s3_endpoint}/${config.s3_bucket}/${s3Key}`\n        }\n      }\n    });\n  }\n  \n  // If no images to upload, pass through\n  if (images.length === 0) {\n    results.push(item);\n  }\n}\n\nreturn results;"
+      },
+      "id": "prepare-s3-upload",
+      "name": "Prepare S3 Upload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [400, 320]
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "={{ $json.current_image.endpoint + '/' + $json.current_image.bucket + '/' + $json.current_image.s3_key }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "awsAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "={{ $json.current_image.content_type }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "string",
+        "bodyContentType": "raw",
+        "rawBody": "={{ $json.current_image.base64 }}",
+        "options": {}
+      },
+      "id": "s3-upload",
+      "name": "Upload to S3",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [624, 320],
+      "notes": "Upload image to MinIO/S3 using AWS credentials",
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Collect all uploaded image URLs\nconst items = $input.all();\nconst mainData = items[0].json;\nconst photoUrls = [];\n\nfor (const item of items) {\n  if (item.json.current_image && item.json.current_image.public_url) {\n    photoUrls.push(item.json.current_image.public_url);\n  }\n}\n\n// Update job_close with all photo URLs\nif (mainData.job_close) {\n  mainData.job_close.media = mainData.job_close.media || {};\n  mainData.job_close.media.photo_urls = [\n    ...(mainData.job_close.media.photo_urls || []),\n    ...photoUrls\n  ];\n}\n\nreturn [{ json: mainData }];"
+      },
+      "id": "collect-urls",
+      "name": "Collect Image URLs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [848, 320]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ $('Config').item.json.supabase_url + '/rest/v1/bookings'}}",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "id",
+              "value": "=eq.{{$json.booking_id}}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $('Config').item.json.supabase_apikey }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "={{ $('Config').item.json.supabase_authorization }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=representation"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{({\n  status: $json.status_action === 'done' ? 'completed' : 'cancelled',\n  payload: {\n    job_close: $json.job_close\n  }\n})}}",
+        "options": {}
+      },
+      "id": "update-booking",
+      "name": "Update Booking (completed)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [1072, 512]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Config').item.json.supabase_url + '/rest/v1/booking_events'}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $('Config').item.json.supabase_apikey }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "={{ $('Config').item.json.supabase_authorization }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=representation"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{({\n  booking_id: $json.booking_id,\n  action: 'job_close_submitted',\n  started_at: $json.closed_at,\n  location: $json.job_close?.location || {},\n  meta: {\n    job_close: $json.job_close,\n    job_number: $json.job_number,\n    queue_number: $json.queue_number\n  }\n})}}",
+        "options": {}
+      },
+      "id": "insert-event",
+      "name": "Insert Event (job_close_submitted)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [1296, 512]
+    },
+    {
+      "parameters": {
+        "fields": {
+          "values": [
+            {
+              "name": "line_message",
+              "stringValue": "={{(() => {\n  const jc = $json.job_close || {};\n  const summary = jc.summary || {};\n  const payment = jc.payment || {};\n  const feedback = jc.customer_feedback || {};\n  const qno = $json.queue_number || $json.job_number || '-';\n  const techName = $json.technician?.technician_name || '-';\n  \n  const startTime = summary.work_start_time ? new Date(summary.work_start_time).toLocaleString('th-TH') : '-';\n  const endTime = summary.work_end_time ? new Date(summary.work_end_time).toLocaleString('th-TH') : '-';\n  const duration = summary.work_start_time && summary.work_end_time ? \n    Math.round((new Date(summary.work_end_time) - new Date(summary.work_start_time)) / 60000) + ' นาที' : '-';\n  \n  const rating = '⭐'.repeat(feedback.rating || 0);\n  const photoCount = (jc.media?.photo_urls?.length || 0);\n  \n  const lines = [\n    '✅ ปิดงาน',\n    `คิว: ${qno}`,\n    `ช่าง: ${techName}`,\n    `ประเภท: ${summary.service_type || '-'}`,\n    `จำนวน: ${summary.unit_done || 0}/${summary.unit_planned || 0} เครื่อง`,\n    `เวลาทำงาน: ${duration}`,\n    `เริ่ม: ${startTime}`,\n    `เสร็จ: ${endTime}`,\n    '',\n    `💰 ยอดชำระ: ${payment.net_price || 0} บาท`,\n    `วิธีชำระ: ${payment.payment_method === 'cash' ? 'เงินสด' : payment.payment_method === 'transfer' ? 'โอนเงิน' : '-'}`,\n    '',\n    `คะแนน: ${rating || 'ไม่มี'}`,\n    feedback.comment ? `ความคิดเห็น: ${feedback.comment}` : null,\n    photoCount > 0 ? `📷 รูปภาพ: ${photoCount} รูป` : null,\n    jc.issue ? `⚠️ ปัญหา: ${jc.issue}` : null\n  ].filter(Boolean);\n  \n  return { type: 'text', text: lines.join('\\n') };\n})()}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "build-line-message",
+      "name": "Build LINE Message",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [1520, 512]
+    },
+    {
+      "parameters": {
+        "operation": "send",
+        "to": "={{ 'C3c85d15973e816ded98a753949e0257f' }}",
+        "messages": {
+          "values": [
+            {
+              "text": "={{$json.line_message}}"
+            }
+          ]
+        }
+      },
+      "id": "line-notification",
+      "name": "LINE Push (Admin Group)",
+      "type": "@aotoki/n8n-nodes-line-messaging.lineMessaging",
+      "typeVersion": 1,
+      "position": [1744, 512],
+      "credentials": {
+        "lineMessagingApi": {
+          "id": "F0w10rTl95F0dij9",
+          "name": "ห้องคิวงาน"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { success: true, action: 'job_closed', booking_id: $json.booking_id, job_number: $json.job_number, closed_at: $json.closed_at, photo_urls: $json.job_close?.media?.photo_urls || [] } }}",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json; charset=utf-8"
+              },
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              },
+              {
+                "name": "Access-Control-Allow-Methods",
+                "value": "GET, POST, OPTIONS"
+              },
+              {
+                "name": "Access-Control-Allow-Headers",
+                "value": "Content-Type, Authorization"
+              }
+            ]
+          }
+        }
+      },
+      "id": "respond-ok",
+      "name": "Respond OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [1968, 512]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { success: false, error: 'Missing booking_id', message: 'booking_id is required' } }}",
+        "options": {
+          "responseCode": 400,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json; charset=utf-8"
+              },
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              }
+            ]
+          }
+        }
+      },
+      "id": "respond-error",
+      "name": "Respond Error (No booking_id)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [176, 704]
+    }
+  ],
+  "connections": {
+    "LIFF Webhook (job-close)": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Normalize Close Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Close Data": {
+      "main": [
+        [
+          {
+            "node": "Has booking_id?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has booking_id?": {
+      "main": [
+        [
+          {
+            "node": "Has Images to Upload?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Error (No booking_id)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Images to Upload?": {
+      "main": [
+        [
+          {
+            "node": "Prepare S3 Upload",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Update Booking (completed)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare S3 Upload": {
+      "main": [
+        [
+          {
+            "node": "Upload to S3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload to S3": {
+      "main": [
+        [
+          {
+            "node": "Collect Image URLs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Collect Image URLs": {
+      "main": [
+        [
+          {
+            "node": "Update Booking (completed)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Booking (completed)": {
+      "main": [
+        [
+          {
+            "node": "Insert Event (job_close_submitted)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Event (job_close_submitted)": {
+      "main": [
+        [
+          {
+            "node": "Build LINE Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build LINE Message": {
+      "main": [
+        [
+          {
+            "node": "LINE Push (Admin Group)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LINE Push (Admin Group)": {
+      "main": [
+        [
+          {
+            "node": "Respond OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false,
+    "instanceId": "50b9398667fecef5231b900714a0997b8e87996f58727cad5427170a677b0267"
+  },
+  "tags": []
+}
