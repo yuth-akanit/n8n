@@ -1,0 +1,47 @@
+'use client'
+
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+
+export function PatchReviewActions({ patchId }: { patchId: string }) {
+  const [loading, setLoading] = useState<'approve' | 'reject' | null>(null)
+  const [error, setError] = useState('')
+  const router = useRouter()
+
+  async function handleAction(action: 'approve' | 'reject') {
+    setLoading(action)
+    setError('')
+    try {
+      const res = await fetch(`/api/seo/patches/${patchId}/${action}`, {
+        method: 'POST',
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? `${action} failed`)
+      router.refresh()
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Action failed')
+    } finally {
+      setLoading(null)
+    }
+  }
+
+  return (
+    <div className="flex gap-3">
+      {error && <p className="text-sm text-red-600">{error}</p>}
+      <button
+        onClick={() => handleAction('approve')}
+        disabled={loading !== null}
+        className="btn-primary"
+      >
+        {loading === 'approve' ? 'Approving…' : 'Approve Patch'}
+      </button>
+      <button
+        onClick={() => handleAction('reject')}
+        disabled={loading !== null}
+        className="btn-danger"
+      >
+        {loading === 'reject' ? 'Rejecting…' : 'Reject'}
+      </button>
+    </div>
+  )
+}
