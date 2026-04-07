@@ -417,8 +417,7 @@ create policy "seo_patches_update" on seo_patches
   );
 
 -- ============================================================
--- SEED: Default workspace
+-- NOTE: No seed workspace needed.
+-- Workspaces are auto-created per-user on first login via resolveWorkspace()
+-- in lib/auth/server.ts.
 -- ============================================================
-insert into workspaces (id, name, slug)
-values ('00000000-0000-0000-0000-000000000001', 'Internal Team', 'internal')
-on conflict (slug) do nothing;

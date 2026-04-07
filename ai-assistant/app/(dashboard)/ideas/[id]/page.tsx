@@ -1,6 +1,8 @@
-import { notFound } from 'next/navigation'
+export const dynamic = 'force-dynamic'
+import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
-import { createClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/server'
+import { getAuthContext } from '@/lib/auth/server'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { Badge } from '@/components/ui/Badge'
 import { formatDate } from '@/lib/utils'
@@ -12,11 +14,14 @@ interface Props {
 }
 
 export default async function IdeaDetailPage({ params }: Props) {
-  const supabase = createClient()
+  const ctx = await getAuthContext()
+  if (!ctx) redirect('/login')
+  const supabase = createServiceClient()
   const { data: idea, error } = await supabase
     .from('ideas')
     .select('*')
     .eq('id', params.id)
+    .eq('workspace_id', ctx.workspaceId)
     .single()
 
   if (error || !idea) notFound()

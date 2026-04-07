@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import { createClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/server'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { Badge } from '@/components/ui/Badge'
 import { formatDate } from '@/lib/utils'
@@ -12,7 +12,7 @@ interface Props {
 }
 
 export default async function SeoPatchDetailPage({ params }: Props) {
-  const supabase = createClient()
+  const supabase = createServiceClient()
   const { data: patch, error } = await supabase
     .from('seo_patches')
     .select('*, seo_audits(target_url, id)')

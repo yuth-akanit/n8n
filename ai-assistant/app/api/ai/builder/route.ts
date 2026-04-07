@@ -1,21 +1,42 @@
 import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
+import { requireApiAuth } from '@/lib/auth/server'
 import { runBuilderPrompt } from '@/lib/ai'
-import type { BuilderRequest } from '@/types'
+import type { BuilderMode } from '@/types'
 
 export async function POST(request: Request) {
+  let ctx
   try {
-    const body = (await request.json()) as BuilderRequest
-    const { workspaceId, projectId, mode, prompt } = body
+    ctx = await requireApiAuth()
+  } catch (err) {
+    return err as Response
+  }
 
-    if (!workspaceId || !mode || !prompt) {
-      return NextResponse.json({ error: 'workspaceId, mode, and prompt are required' }, { status: 400 })
+  try {
+    const body = await request.json() as { projectId?: string; mode: BuilderMode; prompt: string }
+    const { projectId, mode, prompt } = body
+
+    if (!mode || !prompt) {
+      return NextResponse.json({ error: 'mode and prompt are required' }, { status: 400 })
     }
 
     const supabase = createServiceClient()
+    const { workspaceId, user } = ctx
     const start = Date.now()
 
-    // Create AI session
+    // If projectId supplied, verify ownership
+    if (projectId) {
+      const { data: proj } = await supabase
+        .from('projects')
+        .select('id')
+        .eq('id', projectId)
+        .eq('workspace_id', workspaceId)
+        .single()
+      if (!proj) {
+        return NextResponse.json({ error: 'Project not found' }, { status: 404 })
+      }
+    }
+
     const { data: session, error: sessionErr } = await supabase
       .from('ai_sessions')
       .insert({
@@ -23,6 +44,7 @@ export async function POST(request: Request) {
         project_id: projectId ?? null,
         module: 'builder',
         title: `${mode}: ${prompt.slice(0, 60)}`,
+        created_by: user.id,
       })
       .select()
       .single()
@@ -65,21 +87,13 @@ export async function POST(request: Request) {
     })
 
     const artifactTypeMap: Record<string, string> = {
-      spec: 'markdown',
-      sql: 'sql',
-      api: 'markdown',
-      ui: 'markdown',
-      code_patch: 'code',
+      spec: 'markdown', sql: 'sql', api: 'markdown', ui: 'markdown', code_patch: 'code',
     }
-
     const formatMap: Record<string, string> = {
-      spec: 'md',
-      sql: 'sql',
-      api: 'md',
-      ui: 'md',
-      code_patch: 'ts',
+      spec: 'md', sql: 'sql', api: 'md', ui: 'md', code_patch: 'ts',
     }
 
+    const title = `${result.title}: ${prompt.slice(0, 50)}`
     const { data: artifact } = await supabase
       .from('artifacts')
       .insert({
@@ -87,9 +101,10 @@ export async function POST(request: Request) {
         project_id: projectId ?? null,
         ai_run_id: runRecord?.id ?? null,
         artifact_type: artifactTypeMap[mode] ?? 'markdown',
-        title: `${result.title}: ${prompt.slice(0, 50)}`,
+        title,
         content: result.content,
         format: formatMap[mode] ?? 'md',
+        created_by: user.id,
       })
       .select()
       .single()
@@ -98,7 +113,7 @@ export async function POST(request: Request) {
       sessionId: session.id,
       artifactId: artifact?.id,
       content: result.content,
-      title: `${result.title}: ${prompt.slice(0, 50)}`,
+      title,
     })
   } catch (err: unknown) {
     console.error('[api/ai/builder]', err)

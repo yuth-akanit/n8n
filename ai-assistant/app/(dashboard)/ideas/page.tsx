@@ -1,18 +1,23 @@
 export const dynamic = 'force-dynamic'
+import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { createClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/server'
+import { getAuthContext } from '@/lib/auth/server'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { Badge } from '@/components/ui/Badge'
 import { EmptyState } from '@/components/ui/EmptyState'
-import { DEFAULT_WORKSPACE_ID, timeAgo } from '@/lib/utils'
+import { timeAgo } from '@/lib/utils'
 import type { Idea } from '@/types'
 
 export default async function IdeasPage() {
-  const supabase = createClient()
+  const ctx = await getAuthContext()
+  if (!ctx) redirect('/login')
+
+  const supabase = createServiceClient()
   const { data: ideas, error } = await supabase
     .from('ideas')
     .select('*')
-    .eq('workspace_id', DEFAULT_WORKSPACE_ID)
+    .eq('workspace_id', ctx.workspaceId)
     .order('created_at', { ascending: false })
 
   return (
@@ -20,11 +25,7 @@ export default async function IdeasPage() {
       <PageHeader
         title="Idea Lab"
         description="Brainstorm and evaluate ideas with AI"
-        action={
-          <Link href="/dashboard/ideas/new" className="btn-primary">
-            + New Idea
-          </Link>
-        }
+        action={<Link href="/dashboard/ideas/new" className="btn-primary">+ New Idea</Link>}
       />
 
       {error && (
@@ -42,11 +43,8 @@ export default async function IdeasPage() {
       ) : (
         <div className="space-y-3">
           {(ideas as Idea[]).map((idea) => (
-            <Link
-              key={idea.id}
-              href={`/dashboard/ideas/${idea.id}`}
-              className="card p-4 flex items-start justify-between hover:shadow-md transition-shadow block"
-            >
+            <Link key={idea.id} href={`/dashboard/ideas/${idea.id}`}
+              className="card p-4 flex items-start justify-between hover:shadow-md transition-shadow block">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1">
                   <h2 className="text-sm font-semibold text-gray-900 truncate">{idea.title}</h2>
@@ -55,7 +53,7 @@ export default async function IdeasPage() {
                 <p className="text-sm text-gray-500 truncate">{idea.brief}</p>
                 <p className="text-xs text-gray-400 mt-1">{timeAgo(idea.created_at)}</p>
               </div>
-              {(idea.score_roi !== null) && (
+              {idea.score_roi !== null && (
                 <div className="flex gap-3 ml-4 flex-shrink-0 text-center">
                   <ScorePill label="Impact" value={idea.score_impact} />
                   <ScorePill label="Ease" value={idea.score_ease} />

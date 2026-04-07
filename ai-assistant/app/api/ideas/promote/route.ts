@@ -1,25 +1,34 @@
 import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
+import { requireApiAuth } from '@/lib/auth/server'
 import { slugify } from '@/lib/utils'
 import type { Idea } from '@/types'
 
-// POST /api/ideas/promote — convert idea to project
 export async function POST(request: Request) {
+  let ctx
   try {
-    const body = await request.json() as { ideaId: string; workspaceId: string }
-    const { ideaId, workspaceId } = body
+    ctx = await requireApiAuth()
+  } catch (err) {
+    return err as Response
+  }
 
-    if (!ideaId || !workspaceId) {
-      return NextResponse.json({ error: 'ideaId and workspaceId are required' }, { status: 400 })
+  try {
+    const body = await request.json() as { ideaId: string }
+    const { ideaId } = body
+
+    if (!ideaId) {
+      return NextResponse.json({ error: 'ideaId is required' }, { status: 400 })
     }
 
     const supabase = createServiceClient()
+    const { workspaceId, user } = ctx
 
-    // Fetch idea
+    // Fetch idea and verify it belongs to the user's workspace
     const { data: idea, error: ideaErr } = await supabase
       .from('ideas')
       .select('*')
       .eq('id', ideaId)
+      .eq('workspace_id', workspaceId)
       .single()
 
     if (ideaErr || !idea) {
@@ -28,7 +37,6 @@ export async function POST(request: Request) {
 
     const i = idea as Idea
 
-    // Generate unique slug
     const baseSlug = slugify(i.title)
     let slug = baseSlug
     let attempt = 0
@@ -40,13 +48,11 @@ export async function POST(request: Request) {
         .eq('workspace_id', workspaceId)
         .eq('slug', slug)
         .single()
-
       if (!existing) break
       attempt++
       slug = `${baseSlug}-${attempt}`
     }
 
-    // Create project from idea
     const { data: project, error: projectErr } = await supabase
       .from('projects')
       .insert({
@@ -59,13 +65,13 @@ export async function POST(request: Request) {
         goal: i.solution ?? i.brief,
         status: 'planning',
         priority: 'medium',
+        created_by: user.id,
       })
       .select()
       .single()
 
     if (projectErr) throw projectErr
 
-    // Mark idea as converted
     await supabase
       .from('ideas')
       .update({ status: 'converted', updated_at: new Date().toISOString() })

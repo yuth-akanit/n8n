@@ -1,34 +1,41 @@
 import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
+import { requireApiAuth } from '@/lib/auth/server'
 import { runIdeaPrompt } from '@/lib/ai'
-import type { GenerateIdeasRequest } from '@/types'
 
 export async function POST(request: Request) {
+  let ctx
   try {
-    const body = (await request.json()) as GenerateIdeasRequest
-    const { workspaceId, prompt, constraints } = body
+    ctx = await requireApiAuth()
+  } catch (err) {
+    return err as Response
+  }
 
-    if (!workspaceId || !prompt) {
-      return NextResponse.json({ error: 'workspaceId and prompt are required' }, { status: 400 })
+  try {
+    const body = await request.json() as { prompt: string; constraints?: string }
+    const { prompt, constraints } = body
+
+    if (!prompt) {
+      return NextResponse.json({ error: 'prompt is required' }, { status: 400 })
     }
 
     const supabase = createServiceClient()
+    const { workspaceId, user } = ctx
     const start = Date.now()
 
-    // Create AI session
     const { data: session, error: sessionErr } = await supabase
       .from('ai_sessions')
       .insert({
         workspace_id: workspaceId,
         module: 'idea',
         title: prompt.slice(0, 80),
+        created_by: user.id,
       })
       .select()
       .single()
 
     if (sessionErr) throw sessionErr
 
-    // Save user message
     await supabase.from('ai_messages').insert({
       session_id: session.id,
       role: 'user',
@@ -36,11 +43,9 @@ export async function POST(request: Request) {
       metadata: { constraints },
     })
 
-    // Run AI
     const result = await runIdeaPrompt(prompt, constraints)
     const latency = Date.now() - start
 
-    // Save AI run record
     const { data: runRecord } = await supabase
       .from('ai_runs')
       .insert({
@@ -59,7 +64,6 @@ export async function POST(request: Request) {
       .select()
       .single()
 
-    // Save AI assistant message
     await supabase.from('ai_messages').insert({
       session_id: session.id,
       role: 'assistant',
@@ -67,7 +71,6 @@ export async function POST(request: Request) {
       metadata: { latency_ms: latency },
     })
 
-    // Save artifact
     const { data: artifact } = await supabase
       .from('artifacts')
       .insert({
@@ -77,6 +80,7 @@ export async function POST(request: Request) {
         title: `Ideas: ${prompt.slice(0, 60)}`,
         content: JSON.stringify({ prompt, constraints, ideas: result.ideas }, null, 2),
         format: 'json',
+        created_by: user.id,
       })
       .select()
       .single()

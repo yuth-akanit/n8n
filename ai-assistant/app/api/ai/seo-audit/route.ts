@@ -1,28 +1,33 @@
 import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
+import { requireApiAuth } from '@/lib/auth/server'
 import { fetchAndExtractPage } from '@/lib/seo/scraper'
 import { runSeoRules, computeSeoScore } from '@/lib/seo/rules'
 import { runSeoSummaryPrompt } from '@/lib/ai'
-import type { SeoAuditRequest } from '@/types'
 
 export async function POST(request: Request) {
+  let ctx
   try {
-    const body = await request.json() as SeoAuditRequest & {
-      workspaceId: string
-      siteName?: string
-    }
-    const { workspaceId, targetUrl, siteName, scope } = body
+    ctx = await requireApiAuth()
+  } catch (err) {
+    return err as Response
+  }
+
+  try {
+    const body = await request.json() as { targetUrl: string; siteName?: string; scope?: string }
+    const { targetUrl, siteName, scope } = body
 
     if (!targetUrl) {
       return NextResponse.json({ error: 'targetUrl is required' }, { status: 400 })
     }
 
     const supabase = createServiceClient()
+    const { workspaceId, user } = ctx
 
-    // Ensure site exists (upsert by base_url)
+    // Upsert site record scoped to this workspace
     const baseUrl = new URL(targetUrl).origin
-
     let siteId: string
+
     const { data: existingSite } = await supabase
       .from('seo_sites')
       .select('id')
@@ -35,19 +40,13 @@ export async function POST(request: Request) {
     } else {
       const { data: newSite, error: siteErr } = await supabase
         .from('seo_sites')
-        .insert({
-          workspace_id: workspaceId,
-          name: siteName ?? baseUrl,
-          base_url: baseUrl,
-        })
+        .insert({ workspace_id: workspaceId, name: siteName ?? baseUrl, base_url: baseUrl })
         .select()
         .single()
-
-      if (siteErr) throw siteErr
+      if (siteErr || !newSite) throw siteErr ?? new Error('Failed to create site')
       siteId = newSite.id
     }
 
-    // Create audit record
     const { data: audit, error: auditErr } = await supabase
       .from('seo_audits')
       .insert({
@@ -55,6 +54,7 @@ export async function POST(request: Request) {
         status: 'running',
         audit_scope: scope ?? 'single_url',
         target_url: targetUrl,
+        created_by: user.id,
       })
       .select()
       .single()
@@ -73,7 +73,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: String(fetchErr) }, { status: 422 })
     }
 
-    // Save audit page
     const { data: auditPage } = await supabase
       .from('seo_audit_pages')
       .insert({
@@ -94,33 +93,35 @@ export async function POST(request: Request) {
       .select()
       .single()
 
-    // Run deterministic SEO rules
     const ruleIssues = runSeoRules(pageData)
     const score = computeSeoScore(ruleIssues)
 
-    // Save issues
     if (ruleIssues.length > 0) {
-      const issueRows = ruleIssues.map((issue) => ({
-        audit_id: audit.id,
-        page_id: auditPage?.id ?? null,
-        ...issue,
-      }))
-      await supabase.from('seo_issues').insert(issueRows)
+      await supabase.from('seo_issues').insert(
+        ruleIssues.map((issue) => ({
+          audit_id: audit.id,
+          page_id: auditPage?.id ?? null,
+          ...issue,
+        }))
+      )
     }
 
-    // AI summary (best-effort, non-blocking failure)
+    // AI summary — best-effort
     let aiSummary = ''
     try {
       const summaryResult = await runSeoSummaryPrompt(
-        { url: pageData.url, title: pageData.title, meta_description: pageData.meta_description, h1: pageData.h1, canonical_url: pageData.canonical_url, word_count: pageData.word_count, status_code: pageData.status_code },
+        {
+          url: pageData.url, title: pageData.title, meta_description: pageData.meta_description,
+          h1: pageData.h1, canonical_url: pageData.canonical_url,
+          word_count: pageData.word_count, status_code: pageData.status_code,
+        },
         ruleIssues.map((i) => ({ issue_type: i.issue_type, message: i.message }))
       )
       aiSummary = summaryResult.summary
     } catch {
-      // AI summary is optional
+      // optional — continue without
     }
 
-    // Save artifact
     const { data: artifact } = await supabase
       .from('artifacts')
       .insert({
@@ -129,11 +130,11 @@ export async function POST(request: Request) {
         title: `SEO Audit: ${targetUrl}`,
         content: JSON.stringify({ url: targetUrl, score, issues: ruleIssues, summary: aiSummary }, null, 2),
         format: 'json',
+        created_by: user.id,
       })
       .select()
       .single()
 
-    // Update audit as completed
     await supabase
       .from('seo_audits')
       .update({

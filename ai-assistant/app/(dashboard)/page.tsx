@@ -1,14 +1,18 @@
-import Link from 'next/link'
-import { createClient } from '@/lib/supabase/server'
-
 export const dynamic = 'force-dynamic'
+import { redirect } from 'next/navigation'
+import Link from 'next/link'
+import { createServiceClient } from '@/lib/supabase/server'
+import { getAuthContext } from '@/lib/auth/server'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { Badge } from '@/components/ui/Badge'
 import { timeAgo } from '@/lib/utils'
-import { DEFAULT_WORKSPACE_ID } from '@/lib/utils'
 
 export default async function DashboardPage() {
-  const supabase = createClient()
+  const ctx = await getAuthContext()
+  if (!ctx) redirect('/login')
+
+  const { workspaceId } = ctx
+  const supabase = createServiceClient()
 
   const [
     { data: projects },
@@ -19,14 +23,14 @@ export default async function DashboardPage() {
     supabase
       .from('projects')
       .select('id, name, status, priority, updated_at')
-      .eq('workspace_id', DEFAULT_WORKSPACE_ID)
+      .eq('workspace_id', workspaceId)
       .in('status', ['planning', 'building', 'active'])
       .order('updated_at', { ascending: false })
       .limit(5),
     supabase
       .from('artifacts')
-      .select('id, title, artifact_type, created_at, project_id')
-      .eq('workspace_id', DEFAULT_WORKSPACE_ID)
+      .select('id, title, artifact_type, created_at')
+      .eq('workspace_id', workspaceId)
       .eq('is_latest', true)
       .order('created_at', { ascending: false })
       .limit(6),
@@ -59,11 +63,8 @@ export default async function DashboardPage() {
           { label: 'Open Builder', href: '/dashboard/builder', color: 'bg-indigo-50 border-indigo-200 text-indigo-800 hover:bg-indigo-100' },
           { label: 'SEO Audit', href: '/dashboard/seo', color: 'bg-green-50 border-green-200 text-green-800 hover:bg-green-100' },
         ].map((a) => (
-          <Link
-            key={a.href}
-            href={a.href}
-            className={`card border px-4 py-3 text-sm font-medium text-center transition-colors ${a.color}`}
-          >
+          <Link key={a.href} href={a.href}
+            className={`card border px-4 py-3 text-sm font-medium text-center transition-colors ${a.color}`}>
             {a.label}
           </Link>
         ))}
@@ -80,7 +81,8 @@ export default async function DashboardPage() {
             <ul className="space-y-2">
               {projects.map((p) => (
                 <li key={p.id}>
-                  <Link href={`/dashboard/projects/${p.id}`} className="flex items-center justify-between p-2 rounded hover:bg-gray-50 group">
+                  <Link href={`/dashboard/projects/${p.id}`}
+                    className="flex items-center justify-between p-2 rounded hover:bg-gray-50 group">
                     <span className="text-sm text-gray-900 group-hover:text-blue-600 font-medium truncate">{p.name}</span>
                     <div className="flex items-center gap-2 flex-shrink-0 ml-2">
                       <Badge label={p.priority} status={p.priority} />
@@ -149,11 +151,11 @@ export default async function DashboardPage() {
             <ul className="space-y-2">
               {seoPatches.map((p) => (
                 <li key={p.id}>
-                  <Link
-                    href={`/dashboard/seo/patches/${p.id}`}
-                    className="flex items-center justify-between p-2 rounded hover:bg-gray-50 group"
-                  >
-                    <span className="text-sm text-gray-900 group-hover:text-blue-600 font-medium">{p.patch_type.replace(/_/g, ' ')}</span>
+                  <Link href={`/dashboard/seo/patches/${p.id}`}
+                    className="flex items-center justify-between p-2 rounded hover:bg-gray-50 group">
+                    <span className="text-sm text-gray-900 group-hover:text-blue-600 font-medium">
+                      {p.patch_type.replace(/_/g, ' ')}
+                    </span>
                     <span className="text-xs text-gray-400">{timeAgo(p.created_at)}</span>
                   </Link>
                 </li>

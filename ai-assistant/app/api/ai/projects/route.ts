@@ -1,21 +1,40 @@
 import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
+import { requireApiAuth } from '@/lib/auth/server'
 import { runProjectPlannerPrompt } from '@/lib/ai'
-import type { GenerateProjectPlanRequest } from '@/types'
 
 export async function POST(request: Request) {
+  let ctx
   try {
-    const body = (await request.json()) as GenerateProjectPlanRequest
-    const { workspaceId, projectId, goal, scope } = body
+    ctx = await requireApiAuth()
+  } catch (err) {
+    return err as Response
+  }
 
-    if (!workspaceId || !projectId || !goal) {
-      return NextResponse.json({ error: 'workspaceId, projectId, and goal are required' }, { status: 400 })
+  try {
+    const body = await request.json() as { projectId: string; goal: string; scope?: string }
+    const { projectId, goal, scope } = body
+
+    if (!projectId || !goal) {
+      return NextResponse.json({ error: 'projectId and goal are required' }, { status: 400 })
     }
 
     const supabase = createServiceClient()
+    const { workspaceId, user } = ctx
     const start = Date.now()
 
-    // Create AI session
+    // Verify project belongs to this workspace
+    const { data: project } = await supabase
+      .from('projects')
+      .select('id')
+      .eq('id', projectId)
+      .eq('workspace_id', workspaceId)
+      .single()
+
+    if (!project) {
+      return NextResponse.json({ error: 'Project not found' }, { status: 404 })
+    }
+
     const { data: session, error: sessionErr } = await supabase
       .from('ai_sessions')
       .insert({
@@ -23,6 +42,7 @@ export async function POST(request: Request) {
         project_id: projectId,
         module: 'project',
         title: `Plan: ${goal.slice(0, 80)}`,
+        created_by: user.id,
       })
       .select()
       .single()
@@ -64,7 +84,6 @@ export async function POST(request: Request) {
       metadata: { latency_ms: latency },
     })
 
-    // Save project plan as artifact
     const { data: artifact } = await supabase
       .from('artifacts')
       .insert({
@@ -75,17 +94,18 @@ export async function POST(request: Request) {
         title: `Project Plan: ${goal.slice(0, 60)}`,
         content: JSON.stringify({ goal, scope, milestones: result.milestones, docs: result.docs }, null, 2),
         format: 'json',
+        created_by: user.id,
       })
       .select()
       .single()
 
-    // Save generated docs to project_docs
     if (result.docs?.length) {
       const docRows = result.docs.map((d) => ({
         project_id: projectId,
         doc_type: d.doc_type,
         title: d.title,
         content_md: d.content_md,
+        created_by: user.id,
       }))
       await supabase.from('project_docs').insert(docRows)
     }

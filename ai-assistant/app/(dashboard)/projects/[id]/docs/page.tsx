@@ -1,6 +1,8 @@
-import { notFound } from 'next/navigation'
+export const dynamic = 'force-dynamic'
+import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
-import { createClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/server'
+import { getAuthContext } from '@/lib/auth/server'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { Badge } from '@/components/ui/Badge'
 import { EmptyState } from '@/components/ui/EmptyState'
@@ -13,10 +15,12 @@ interface Props {
 }
 
 export default async function ProjectDocsPage({ params }: Props) {
-  const supabase = createClient()
+  const ctx = await getAuthContext()
+  if (!ctx) redirect('/login')
+  const supabase = createServiceClient()
 
   const [{ data: project }, { data: docs }] = await Promise.all([
-    supabase.from('projects').select('id, name').eq('id', params.id).single(),
+    supabase.from('projects').select('id, name').eq('id', params.id).eq('workspace_id', ctx.workspaceId).single(),
     supabase.from('project_docs').select('*').eq('project_id', params.id).order('created_at'),
   ])
 

@@ -1,17 +1,21 @@
 import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
+import { requireApiAuth } from '@/lib/auth/server'
 import type { GeneratedMilestone } from '@/types'
 
-// POST /api/projects/[id]/plan — save AI-generated plan (milestones + tasks + docs)
 export async function POST(
   request: Request,
   { params }: { params: { id: string } }
 ) {
+  let ctx
   try {
-    const body = await request.json() as {
-      milestones: GeneratedMilestone[]
-      summary?: string
-    }
+    ctx = await requireApiAuth()
+  } catch (err) {
+    return err as Response
+  }
+
+  try {
+    const body = await request.json() as { milestones: GeneratedMilestone[]; summary?: string }
     const { milestones, summary } = body
     const projectId = params.id
 
@@ -21,7 +25,18 @@ export async function POST(
 
     const supabase = createServiceClient()
 
-    // Update project summary if provided
+    // Verify project belongs to user's workspace
+    const { data: project } = await supabase
+      .from('projects')
+      .select('id')
+      .eq('id', projectId)
+      .eq('workspace_id', ctx.workspaceId)
+      .single()
+
+    if (!project) {
+      return NextResponse.json({ error: 'Project not found' }, { status: 404 })
+    }
+
     if (summary) {
       await supabase
         .from('projects')
@@ -29,38 +44,33 @@ export async function POST(
         .eq('id', projectId)
     }
 
-    // Delete existing milestones + tasks (replace strategy)
+    // Replace existing plan
     await supabase.from('tasks').delete().eq('project_id', projectId)
     await supabase.from('milestones').delete().eq('project_id', projectId)
 
-    // Insert milestones and their tasks
     for (const m of milestones) {
       const { data: milestone, error: mErr } = await supabase
         .from('milestones')
-        .insert({
-          project_id: projectId,
-          title: m.title,
-          description: m.description,
-          sort_order: m.sort_order,
-        })
+        .insert({ project_id: projectId, title: m.title, description: m.description, sort_order: m.sort_order })
         .select()
         .single()
 
       if (mErr) throw mErr
 
       if (m.tasks?.length) {
-        const taskRows = m.tasks.map((t) => ({
-          project_id: projectId,
-          milestone_id: milestone.id,
-          title: t.title,
-          description: t.description,
-          task_type: t.task_type,
-          priority: t.priority,
-          estimate_hours: t.estimate_hours,
-          status: 'todo',
-        }))
-
-        const { error: tErr } = await supabase.from('tasks').insert(taskRows)
+        const { error: tErr } = await supabase.from('tasks').insert(
+          m.tasks.map((t) => ({
+            project_id: projectId,
+            milestone_id: milestone.id,
+            title: t.title,
+            description: t.description,
+            task_type: t.task_type,
+            priority: t.priority,
+            estimate_hours: t.estimate_hours,
+            status: 'todo',
+            created_by: ctx.user.id,
+          }))
+        )
         if (tErr) throw tErr
       }
     }

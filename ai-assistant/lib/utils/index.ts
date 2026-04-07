@@ -91,6 +91,3 @@ export function getStatusColor(status: string): string {
   }
   return map[status] ?? 'bg-gray-100 text-gray-700'
 }
-
-/** Default workspace ID used for MVP single-workspace mode */
-export const DEFAULT_WORKSPACE_ID = '00000000-0000-0000-0000-000000000001'

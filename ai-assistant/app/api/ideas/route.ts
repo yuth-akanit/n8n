@@ -1,16 +1,23 @@
 export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
+import { requireApiAuth } from '@/lib/auth/server'
 import type { GeneratedIdea } from '@/types'
 
-// POST /api/ideas — save a generated idea to the database
 export async function POST(request: Request) {
+  let ctx
   try {
-    const body = await request.json() as GeneratedIdea & { workspaceId: string }
-    const { workspaceId, title, brief, audience, problem, solution, channel, score_impact, score_ease, score_roi } = body
+    ctx = await requireApiAuth()
+  } catch (err) {
+    return err as Response
+  }
 
-    if (!workspaceId || !title || !brief) {
-      return NextResponse.json({ error: 'workspaceId, title, and brief are required' }, { status: 400 })
+  try {
+    const body = await request.json() as Omit<GeneratedIdea, never> & { workspaceId?: string }
+    const { title, brief, audience, problem, solution, channel, score_impact, score_ease, score_roi } = body
+
+    if (!title || !brief) {
+      return NextResponse.json({ error: 'title and brief are required' }, { status: 400 })
     }
 
     const supabase = createServiceClient()
@@ -18,7 +25,7 @@ export async function POST(request: Request) {
     const { data, error } = await supabase
       .from('ideas')
       .insert({
-        workspace_id: workspaceId,
+        workspace_id: ctx.workspaceId,
         title,
         brief,
         audience,
@@ -29,6 +36,7 @@ export async function POST(request: Request) {
         score_ease,
         score_roi,
         status: 'new',
+        created_by: ctx.user.id,
       })
       .select()
       .single()
@@ -37,7 +45,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json(data, { status: 201 })
   } catch (err: unknown) {
-    console.error('[api/ideas]', err)
+    console.error('[api/ideas POST]', err)
     return NextResponse.json(
       { error: err instanceof Error ? err.message : 'Internal server error' },
       { status: 500 }

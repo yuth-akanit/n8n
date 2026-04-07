@@ -1,48 +1,54 @@
 export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
+import { requireApiAuth } from '@/lib/auth/server'
 import { slugify } from '@/lib/utils'
 import type { ProjectType, Priority } from '@/types'
 
-// GET /api/projects?workspaceId=...
-export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url)
-  const workspaceId = searchParams.get('workspaceId') ?? '00000000-0000-0000-0000-000000000001'
+export async function GET() {
+  let ctx
+  try {
+    ctx = await requireApiAuth()
+  } catch (err) {
+    return err as Response
+  }
 
   const supabase = createServiceClient()
   const { data, error } = await supabase
     .from('projects')
     .select('*')
-    .eq('workspace_id', workspaceId)
+    .eq('workspace_id', ctx.workspaceId)
     .order('updated_at', { ascending: false })
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
-  }
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json(data)
 }
 
-// POST /api/projects
 export async function POST(request: Request) {
+  let ctx
+  try {
+    ctx = await requireApiAuth()
+  } catch (err) {
+    return err as Response
+  }
+
   try {
     const body = await request.json() as {
-      workspaceId: string
       name: string
       project_type: ProjectType
       goal?: string
       summary?: string
       priority?: Priority
     }
+    const { name, project_type, goal, summary, priority } = body
 
-    const { workspaceId, name, project_type, goal, summary, priority } = body
-
-    if (!workspaceId || !name || !project_type) {
-      return NextResponse.json({ error: 'workspaceId, name, and project_type are required' }, { status: 400 })
+    if (!name || !project_type) {
+      return NextResponse.json({ error: 'name and project_type are required' }, { status: 400 })
     }
 
     const supabase = createServiceClient()
+    const { workspaceId, user } = ctx
 
-    // Generate unique slug
     const baseSlug = slugify(name)
     let slug = baseSlug
     let attempt = 0
@@ -54,7 +60,6 @@ export async function POST(request: Request) {
         .eq('workspace_id', workspaceId)
         .eq('slug', slug)
         .single()
-
       if (!existing) break
       attempt++
       slug = `${baseSlug}-${attempt}`
@@ -71,6 +76,7 @@ export async function POST(request: Request) {
         summary,
         priority: priority ?? 'medium',
         status: 'draft',
+        created_by: user.id,
       })
       .select()
       .single()
