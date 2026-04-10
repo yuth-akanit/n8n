@@ -338,21 +338,21 @@ create policy "projects_update" on projects
 -- Project docs: via project membership
 create policy "project_docs_select" on project_docs
   for select using (
-    exists (select 1 from projects p where p.id = project_docs.project_id and is_workspace_member(p.workspace_id))
+    project_id in (select id from projects where is_workspace_member(workspace_id))
   );
 create policy "project_docs_insert" on project_docs
   for insert with check (
-    exists (select 1 from projects p where p.id = project_docs.project_id and is_workspace_member(p.workspace_id))
+    project_id in (select id from projects where is_workspace_member(workspace_id))
   );
 
 -- Milestones and Tasks: via project membership
 create policy "milestones_select" on milestones
   for select using (
-    exists (select 1 from projects p where p.id = milestones.project_id and is_workspace_member(p.workspace_id))
+    project_id in (select id from projects where is_workspace_member(workspace_id))
   );
 create policy "tasks_select" on tasks
   for select using (
-    exists (select 1 from projects p where p.id = tasks.project_id and is_workspace_member(p.workspace_id))
+    project_id in (select id from projects where is_workspace_member(workspace_id))
   );
 
 -- AI sessions/messages/runs: workspace members
@@ -360,11 +360,11 @@ create policy "ai_sessions_select" on ai_sessions
   for select using (is_workspace_member(workspace_id));
 create policy "ai_messages_select" on ai_messages
   for select using (
-    exists (select 1 from ai_sessions s where s.id = ai_messages.session_id and is_workspace_member(s.workspace_id))
+    session_id in (select id from ai_sessions where is_workspace_member(workspace_id))
   );
 create policy "ai_runs_select" on ai_runs
   for select using (
-    exists (select 1 from ai_sessions s where s.id = ai_runs.session_id and is_workspace_member(s.workspace_id))
+    session_id in (select id from ai_sessions where is_workspace_member(workspace_id))
   );
 
 -- Artifacts: workspace members
@@ -381,38 +381,38 @@ create policy "seo_sites_insert" on seo_sites
 
 create policy "seo_audits_select" on seo_audits
   for select using (
-    exists (select 1 from seo_sites s where s.id = seo_audits.site_id and is_workspace_member(s.workspace_id))
+    site_id in (select id from seo_sites where is_workspace_member(workspace_id))
   );
 create policy "seo_audit_pages_select" on seo_audit_pages
   for select using (
-    exists (
-      select 1 from seo_audits a
+    audit_id in (
+      select a.id from seo_audits a
       join seo_sites s on s.id = a.site_id
-      where a.id = seo_audit_pages.audit_id and is_workspace_member(s.workspace_id)
+      where is_workspace_member(s.workspace_id)
     )
   );
 create policy "seo_issues_select" on seo_issues
   for select using (
-    exists (
-      select 1 from seo_audits a
+    audit_id in (
+      select a.id from seo_audits a
       join seo_sites s on s.id = a.site_id
-      where a.id = seo_issues.audit_id and is_workspace_member(s.workspace_id)
+      where is_workspace_member(s.workspace_id)
     )
   );
 create policy "seo_patches_select" on seo_patches
   for select using (
-    exists (
-      select 1 from seo_audits a
+    audit_id in (
+      select a.id from seo_audits a
       join seo_sites s on s.id = a.site_id
-      where a.id = seo_patches.audit_id and is_workspace_member(s.workspace_id)
+      where is_workspace_member(s.workspace_id)
     )
   );
 create policy "seo_patches_update" on seo_patches
   for update using (
-    exists (
-      select 1 from seo_audits a
+    audit_id in (
+      select a.id from seo_audits a
       join seo_sites s on s.id = a.site_id
-      where a.id = seo_patches.audit_id and is_workspace_member(s.workspace_id)
+      where is_workspace_member(s.workspace_id)
     )
   );
 
