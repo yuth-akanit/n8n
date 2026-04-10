@@ -297,17 +297,43 @@ alter table seo_audit_pages enable row level security;
 alter table seo_issues enable row level security;
 alter table seo_patches enable row level security;
 
--- Helper function: is user a member of workspace?
+-- Helper: is user a member of workspace?
 create or replace function is_workspace_member(ws_id uuid)
-returns boolean
-language sql
-security definer
-stable
-as $$
+returns boolean language sql security definer stable as $$
   select exists (
     select 1 from workspace_members
-    where workspace_id = ws_id
-      and user_id = auth.uid()
+    where workspace_id = ws_id and user_id = auth.uid()
+  );
+$$;
+
+-- Helper: does project belong to user's workspace?
+create or replace function is_my_project(proj_id uuid)
+returns boolean language sql security definer stable as $$
+  select exists (
+    select 1 from projects p
+    join workspace_members wm on wm.workspace_id = p.workspace_id
+    where p.id = proj_id and wm.user_id = auth.uid()
+  );
+$$;
+
+-- Helper: does ai_session belong to user's workspace?
+create or replace function is_my_ai_session(sess_id uuid)
+returns boolean language sql security definer stable as $$
+  select exists (
+    select 1 from ai_sessions s
+    join workspace_members wm on wm.workspace_id = s.workspace_id
+    where s.id = sess_id and wm.user_id = auth.uid()
+  );
+$$;
+
+-- Helper: does seo_audit belong to user's workspace?
+create or replace function is_my_seo_audit(aud_id uuid)
+returns boolean language sql security definer stable as $$
+  select exists (
+    select 1 from seo_audits a
+    join seo_sites st on st.id = a.site_id
+    join workspace_members wm on wm.workspace_id = st.workspace_id
+    where a.id = aud_id and wm.user_id = auth.uid()
   );
 $$;
 
@@ -335,37 +361,25 @@ create policy "projects_insert" on projects
 create policy "projects_update" on projects
   for update using (is_workspace_member(workspace_id));
 
--- Project docs: via project membership
+-- Project docs: via project
 create policy "project_docs_select" on project_docs
-  for select using (
-    project_id in (select id from projects where is_workspace_member(workspace_id))
-  );
+  for select using (is_my_project(project_id));
 create policy "project_docs_insert" on project_docs
-  for insert with check (
-    project_id in (select id from projects where is_workspace_member(workspace_id))
-  );
+  for insert with check (is_my_project(project_id));
 
--- Milestones and Tasks: via project membership
+-- Milestones and Tasks: via project
 create policy "milestones_select" on milestones
-  for select using (
-    project_id in (select id from projects where is_workspace_member(workspace_id))
-  );
+  for select using (is_my_project(project_id));
 create policy "tasks_select" on tasks
-  for select using (
-    project_id in (select id from projects where is_workspace_member(workspace_id))
-  );
+  for select using (is_my_project(project_id));
 
--- AI sessions/messages/runs: workspace members
+-- AI sessions/messages/runs
 create policy "ai_sessions_select" on ai_sessions
   for select using (is_workspace_member(workspace_id));
 create policy "ai_messages_select" on ai_messages
-  for select using (
-    session_id in (select id from ai_sessions where is_workspace_member(workspace_id))
-  );
+  for select using (is_my_ai_session(session_id));
 create policy "ai_runs_select" on ai_runs
-  for select using (
-    session_id in (select id from ai_sessions where is_workspace_member(workspace_id))
-  );
+  for select using (is_my_ai_session(session_id));
 
 -- Artifacts: workspace members
 create policy "artifacts_select" on artifacts
@@ -380,41 +394,17 @@ create policy "seo_sites_insert" on seo_sites
   for insert with check (is_workspace_member(workspace_id));
 
 create policy "seo_audits_select" on seo_audits
-  for select using (
-    site_id in (select id from seo_sites where is_workspace_member(workspace_id))
-  );
+  for select using (is_workspace_member(
+    (select workspace_id from seo_sites where id = site_id)
+  ));
 create policy "seo_audit_pages_select" on seo_audit_pages
-  for select using (
-    audit_id in (
-      select a.id from seo_audits a
-      join seo_sites s on s.id = a.site_id
-      where is_workspace_member(s.workspace_id)
-    )
-  );
+  for select using (is_my_seo_audit(audit_id));
 create policy "seo_issues_select" on seo_issues
-  for select using (
-    audit_id in (
-      select a.id from seo_audits a
-      join seo_sites s on s.id = a.site_id
-      where is_workspace_member(s.workspace_id)
-    )
-  );
+  for select using (is_my_seo_audit(audit_id));
 create policy "seo_patches_select" on seo_patches
-  for select using (
-    audit_id in (
-      select a.id from seo_audits a
-      join seo_sites s on s.id = a.site_id
-      where is_workspace_member(s.workspace_id)
-    )
-  );
+  for select using (is_my_seo_audit(audit_id));
 create policy "seo_patches_update" on seo_patches
-  for update using (
-    audit_id in (
-      select a.id from seo_audits a
-      join seo_sites s on s.id = a.site_id
-      where is_workspace_member(s.workspace_id)
-    )
-  );
+  for update using (is_my_seo_audit(audit_id));
 
 -- ============================================================
 -- NOTE: No seed workspace needed.
