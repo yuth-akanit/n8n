@@ -59,9 +59,24 @@ async function callOpenAiCompatible(
   return { content, provider: providerName, model, latency_ms: Date.now() - start }
 }
 
-async function callAnthropic(prompt: string, systemPrompt: string): Promise<AiCallResult> {
+async function callAnthropic(prompt: string, systemPrompt: string, images?: string[]): Promise<AiCallResult> {
   const start = Date.now()
   const model = 'claude-sonnet-4-6'
+
+  // Build user content with optional images
+  const userContent: any[] = [{ type: 'text', text: prompt }]
+  if (images && images.length > 0) {
+    images.forEach(img => {
+      // Extract media type and base64 data from data URL
+      const match = img.match(/^data:(image\/[^;]+);base64,(.+)$/)
+      if (match) {
+        userContent.push({
+          type: 'image',
+          source: { type: 'base64', media_type: match[1], data: match[2] }
+        })
+      }
+    })
+  }
 
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -74,7 +89,7 @@ async function callAnthropic(prompt: string, systemPrompt: string): Promise<AiCa
       model,
       max_tokens: 4096,
       system: systemPrompt,
-      messages: [{ role: 'user', content: prompt }],
+      messages: [{ role: 'user', content: userContent }],
     }),
   })
 
@@ -155,7 +170,7 @@ async function callOpenAI(prompt: string, systemPrompt: string, images?: string[
   return { content, provider: 'openai', model, latency_ms: Date.now() - start }
 }
 
-async function callGemini(prompt: string, systemPrompt: string): Promise<AiCallResult> {
+async function callGemini(prompt: string, systemPrompt: string, images?: string[]): Promise<AiCallResult> {
   const start = Date.now()
   const model = process.env.GEMINI_MODEL ?? 'gemini-1.5-pro'
   const apiKey = process.env.GEMINI_API_KEY
