@@ -3,7 +3,7 @@
  * Falls back to deterministic mock responses when no API key is configured.
  */
 
-export type AiProvider = 'anthropic' | 'mock'
+export type AiProvider = 'anthropic' | 'openai' | 'gemini' | 'mock'
 
 export interface AiCallResult {
   content: string
@@ -13,9 +13,13 @@ export interface AiCallResult {
 }
 
 function getProvider(): AiProvider {
-  if (process.env.ANTHROPIC_API_KEY && process.env.AI_PROVIDER !== 'mock') {
-    return 'anthropic'
-  }
+  const selected = process.env.AI_PROVIDER
+  if (selected === 'mock') return 'mock'
+  if (selected === 'openai' && process.env.OPENAI_API_KEY) return 'openai'
+  if (selected === 'gemini' && process.env.GEMINI_API_KEY) return 'gemini'
+  if (process.env.ANTHROPIC_API_KEY) return 'anthropic'
+  if (process.env.OPENAI_API_KEY) return 'openai'
+  if (process.env.GEMINI_API_KEY) return 'gemini'
   return 'mock'
 }
 
@@ -71,15 +75,79 @@ async function callMock(promptKey: string): Promise<AiCallResult> {
   }
 }
 
+async function callOpenAI(prompt: string, systemPrompt: string): Promise<AiCallResult> {
+  const start = Date.now()
+  const model = process.env.OPENAI_MODEL ?? 'gpt-4o'
+
+  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model,
+      max_tokens: 4096,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: prompt },
+      ],
+    }),
+  })
+
+  if (!response.ok) {
+    const err = await response.text()
+    throw new Error(`OpenAI API error ${response.status}: ${err}`)
+  }
+
+  const data = await response.json() as {
+    choices: Array<{ message: { content: string } }>
+  }
+  const content = data.choices[0]?.message?.content ?? ''
+
+  return { content, provider: 'openai', model, latency_ms: Date.now() - start }
+}
+
+async function callGemini(prompt: string, systemPrompt: string): Promise<AiCallResult> {
+  const start = Date.now()
+  const model = process.env.GEMINI_MODEL ?? 'gemini-1.5-pro'
+  const apiKey = process.env.GEMINI_API_KEY
+
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        system_instruction: { parts: [{ text: systemPrompt }] },
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { maxOutputTokens: 4096 },
+      }),
+    }
+  )
+
+  if (!response.ok) {
+    const err = await response.text()
+    throw new Error(`Gemini API error ${response.status}: ${err}`)
+  }
+
+  const data = await response.json() as {
+    candidates: Array<{ content: { parts: Array<{ text: string }> } }>
+  }
+  const content = data.candidates[0]?.content?.parts[0]?.text ?? ''
+
+  return { content, provider: 'gemini', model, latency_ms: Date.now() - start }
+}
+
 export async function runAiPrompt(
   promptKey: string,
   userPrompt: string,
   systemPrompt: string
 ): Promise<AiCallResult> {
   const provider = getProvider()
-  if (provider === 'anthropic') {
-    return callAnthropic(userPrompt, systemPrompt)
-  }
+  if (provider === 'anthropic') return callAnthropic(userPrompt, systemPrompt)
+  if (provider === 'openai') return callOpenAI(userPrompt, systemPrompt)
+  if (provider === 'gemini') return callGemini(userPrompt, systemPrompt)
   return callMock(promptKey)
 }
 
