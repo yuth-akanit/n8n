@@ -61,6 +61,7 @@ export function ChatClient({ workspaceId }: { workspaceId: string }) {
 
     const currentPrompt = prompt
     const curAttachments = [...previews]
+    const curFiles = [...attachments] // Save File objects BEFORE clearing state!
     
     setPrompt('')
     setAttachments([])
@@ -70,10 +71,9 @@ export function ChatClient({ workspaceId }: { workspaceId: string }) {
     setLoading(true)
 
     try {
-      // For MVP, we'll convert images to Base64 to send to the API
-      // In production, you'd upload to Supabase Storage first
+      // Convert saved File objects to Base64
       const attachmentBase64 = await Promise.all(
-        attachments.map(file => new Promise<string>((resolve) => {
+        curFiles.map(file => new Promise<string>((resolve) => {
           const reader = new FileReader()
           reader.onloadend = () => resolve(reader.result as string)
           reader.readAsDataURL(file)

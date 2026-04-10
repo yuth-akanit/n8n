@@ -3,6 +3,10 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { requireApiAuth } from '@/lib/auth/server'
 import { runChatPrompt } from '@/lib/ai'
 
+// Allow larger request body for image uploads
+export const maxDuration = 60 // seconds
+export const dynamic = 'force-dynamic'
+
 export async function POST(request: Request) {
   let ctx
   try {
