@@ -1,6 +1,8 @@
-import { notFound } from 'next/navigation'
+export const dynamic = 'force-dynamic'
+import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createServiceClient } from '@/lib/supabase/server'
+import { getAuthContext } from '@/lib/auth/server'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { Badge } from '@/components/ui/Badge'
 import { formatDate } from '@/lib/utils'
@@ -12,11 +14,15 @@ interface Props {
 }
 
 export default async function SeoPatchDetailPage({ params }: Props) {
+  const ctx = await getAuthContext()
+  if (!ctx) redirect('/login')
+
   const supabase = createServiceClient()
   const { data: patch, error } = await supabase
     .from('seo_patches')
-    .select('*, seo_audits(target_url, id)')
+    .select('*, seo_audits!inner(target_url, id, seo_sites!inner(workspace_id))')
     .eq('id', params.id)
+    .eq('seo_audits.seo_sites.workspace_id', ctx.workspaceId)
     .single()
 
   if (error || !patch) notFound()

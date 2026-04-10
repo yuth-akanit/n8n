@@ -1,6 +1,8 @@
-import { notFound } from 'next/navigation'
+export const dynamic = 'force-dynamic'
+import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createServiceClient } from '@/lib/supabase/server'
+import { getAuthContext } from '@/lib/auth/server'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { Badge } from '@/components/ui/Badge'
 import { formatDate } from '@/lib/utils'
@@ -12,6 +14,9 @@ interface Props {
 }
 
 export default async function SeoAuditDetailPage({ params }: Props) {
+  const ctx = await getAuthContext()
+  if (!ctx) redirect('/login')
+
   const supabase = createServiceClient()
 
   const [
@@ -20,7 +25,12 @@ export default async function SeoAuditDetailPage({ params }: Props) {
     { data: issues },
     { data: patches },
   ] = await Promise.all([
-    supabase.from('seo_audits').select('*').eq('id', params.id).single(),
+    supabase
+      .from('seo_audits')
+      .select('*, seo_sites!inner(workspace_id)')
+      .eq('id', params.id)
+      .eq('seo_sites.workspace_id', ctx.workspaceId)
+      .single(),
     supabase.from('seo_audit_pages').select('*').eq('audit_id', params.id).limit(5),
     supabase.from('seo_issues').select('*').eq('audit_id', params.id).order('severity'),
     supabase.from('seo_patches').select('*').eq('audit_id', params.id).order('created_at', { ascending: false }),
