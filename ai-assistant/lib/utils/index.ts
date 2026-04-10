@@ -59,35 +59,35 @@ export function clamp(n: number, min: number, max: number): number {
 export function getStatusColor(status: string): string {
   const map: Record<string, string> = {
     // project/idea
-    new: 'bg-gray-100 text-gray-700',
-    draft: 'bg-gray-100 text-gray-700',
-    refining: 'bg-yellow-100 text-yellow-800',
-    planning: 'bg-blue-100 text-blue-800',
-    approved: 'bg-green-100 text-green-800',
-    building: 'bg-indigo-100 text-indigo-800',
+    new: 'bg-slate-100 text-slate-700',
+    draft: 'bg-slate-100 text-slate-700',
+    refining: 'bg-amber-100 text-amber-800',
+    planning: 'bg-sky-100 text-sky-800',
+    approved: 'bg-emerald-100 text-emerald-800',
+    building: 'bg-violet-100 text-violet-800',
     active: 'bg-green-100 text-green-800',
-    paused: 'bg-yellow-100 text-yellow-800',
-    done: 'bg-green-100 text-green-800',
-    archived: 'bg-gray-100 text-gray-500',
-    rejected: 'bg-red-100 text-red-700',
-    converted: 'bg-purple-100 text-purple-700',
+    paused: 'bg-orange-100 text-orange-800',
+    done: 'bg-teal-100 text-teal-800',
+    archived: 'bg-slate-100 text-slate-500',
+    rejected: 'bg-rose-100 text-rose-700',
+    converted: 'bg-fuchsia-100 text-fuchsia-700',
     // tasks
-    todo: 'bg-gray-100 text-gray-700',
+    todo: 'bg-slate-100 text-slate-700',
     in_progress: 'bg-blue-100 text-blue-800',
     blocked: 'bg-red-100 text-red-700',
-    review: 'bg-yellow-100 text-yellow-800',
+    review: 'bg-amber-100 text-amber-800',
     // seo
-    queued: 'bg-gray-100 text-gray-700',
+    queued: 'bg-slate-100 text-slate-700',
     running: 'bg-blue-100 text-blue-800',
-    completed: 'bg-green-100 text-green-800',
-    failed: 'bg-red-100 text-red-700',
-    proposed: 'bg-yellow-100 text-yellow-800',
-    applied: 'bg-green-100 text-green-800',
+    completed: 'bg-emerald-100 text-emerald-800',
+    failed: 'bg-rose-100 text-rose-700',
+    proposed: 'bg-amber-100 text-amber-800',
+    applied: 'bg-emerald-100 text-emerald-800',
     // severity
-    low: 'bg-gray-100 text-gray-600',
-    medium: 'bg-yellow-100 text-yellow-800',
+    low: 'bg-slate-100 text-slate-600',
+    medium: 'bg-amber-100 text-amber-800',
     high: 'bg-orange-100 text-orange-800',
-    critical: 'bg-red-100 text-red-700',
+    critical: 'bg-rose-100 text-rose-700',
   }
-  return map[status] ?? 'bg-gray-100 text-gray-700'
+  return map[status] ?? 'bg-slate-100 text-slate-700'
 }

@@ -61,7 +61,7 @@ const NAV_ITEMS = [
   },
 ]
 
-export function Sidebar() {
+export function Sidebar({ onClose }: { onClose?: () => void }) {
   const pathname = usePathname()
 
   function isActive(href: string) {
@@ -70,37 +70,49 @@ export function Sidebar() {
   }
 
   return (
-    <aside className="w-60 bg-gray-900 flex flex-col min-h-screen">
+    <aside className="w-full h-full bg-gray-900 flex flex-col shadow-2xl">
       {/* Logo */}
-      <div className="px-4 py-5 border-b border-gray-700">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center">
+      <div className="px-4 py-6 border-b border-gray-800 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-900/20">
             <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
             </svg>
           </div>
           <div>
-            <p className="text-white text-sm font-semibold leading-none">AI Workspace</p>
-            <p className="text-gray-400 text-xs mt-0.5">Internal Team</p>
+            <p className="text-white text-sm font-bold tracking-tight">AI Workspace</p>
+            <p className="text-gray-500 text-[10px] font-medium tracking-widest uppercase">Internal Unit</p>
           </div>
         </div>
+
+        {/* Close button for mobile */}
+        <button 
+          onClick={onClose}
+          className="lg:hidden p-2 text-gray-400 hover:text-white transition-colors"
+        >
+          <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 px-3 py-4 space-y-1">
+      <nav className="flex-1 px-3 py-6 space-y-1.5">
         {NAV_ITEMS.map((item) => {
           const active = isActive(item.href)
           return (
             <Link
               key={item.href}
               href={item.href}
-              className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+              className={`flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 ${
                 active
-                  ? 'bg-blue-600 text-white'
-                  : 'text-gray-300 hover:bg-gray-800 hover:text-white'
+                  ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20'
+                  : 'text-gray-400 hover:bg-gray-800/50 hover:text-white'
               }`}
             >
-              {item.icon}
+              <span className={`transition-transform duration-200 ${active ? 'scale-110' : 'group-hover:scale-110'}`}>
+                {item.icon}
+              </span>
               {item.label}
             </Link>
           )
@@ -108,8 +120,10 @@ export function Sidebar() {
       </nav>
 
       {/* Footer */}
-      <div className="px-4 py-4 border-t border-gray-700">
-        <p className="text-xs text-gray-500">MVP v0.1 · Internal only</p>
+      <div className="px-5 py-5 border-t border-gray-800">
+        <div className="p-3 bg-gray-800/40 rounded-xl">
+          <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest text-center">MVP v0.1 · Alpha</p>
+        </div>
       </div>
     </aside>
   )

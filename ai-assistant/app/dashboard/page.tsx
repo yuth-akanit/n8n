@@ -56,16 +56,16 @@ export default async function DashboardPage() {
       />
 
       {/* Quick actions */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
         {[
-          { label: 'New Idea', href: '/dashboard/ideas/new', color: 'bg-yellow-50 border-yellow-200 text-yellow-800 hover:bg-yellow-100' },
-          { label: 'New Project', href: '/dashboard/projects/new', color: 'bg-blue-50 border-blue-200 text-blue-800 hover:bg-blue-100' },
-          { label: 'Open Builder', href: '/dashboard/builder', color: 'bg-indigo-50 border-indigo-200 text-indigo-800 hover:bg-indigo-100' },
-          { label: 'SEO Audit', href: '/dashboard/seo', color: 'bg-green-50 border-green-200 text-green-800 hover:bg-green-100' },
-          { label: 'AI Chat (ทุกเรื่อง)', href: '/dashboard/chat', color: 'bg-purple-50 border-purple-200 text-purple-800 hover:bg-purple-100' },
+          { label: 'New Idea', href: '/dashboard/ideas/new', color: 'bg-yellow-50 border-yellow-200 text-yellow-800 hover:bg-yellow-100 shadow-sm shadow-yellow-200/50' },
+          { label: 'New Project', href: '/dashboard/projects/new', color: 'bg-blue-50 border-blue-200 text-blue-800 hover:bg-blue-100 shadow-sm shadow-blue-200/50' },
+          { label: 'Open Builder', href: '/dashboard/builder', color: 'bg-indigo-50 border-indigo-200 text-indigo-800 hover:bg-indigo-100 shadow-sm shadow-indigo-200/50' },
+          { label: 'SEO Audit', href: '/dashboard/seo', color: 'bg-green-50 border-green-200 text-green-800 hover:bg-green-100 shadow-sm shadow-green-200/50' },
+          { label: 'AI Chat (ทุกเรื่อง)', href: '/dashboard/chat', color: 'bg-purple-600 border-purple-400 text-white hover:bg-purple-700 shadow-lg shadow-purple-600/20 col-span-2 md:col-span-1' },
         ].map((a) => (
           <Link key={a.href} href={a.href}
-            className={`card border px-4 py-3 text-sm font-medium text-center transition-colors ${a.color}`}>
+            className={`card border px-4 py-4 text-sm font-bold text-center transition-all duration-200 active:scale-95 flex items-center justify-center rounded-2xl ${a.color}`}>
             {a.label}
           </Link>
         ))}
