@@ -63,7 +63,7 @@ export async function POST(request: Request) {
     // Auto-generate UI mockup via Fal.ai if generating a UI Plan
     if (mode === 'ui' && process.env.FAL_KEY) {
       try {
-        const { fal } = await import('@fal-ai/serverless-client')
+        const fal = await import('@fal-ai/serverless-client')
         fal.config({ credentials: process.env.FAL_KEY })
         const falResult = (await fal.subscribe('fal-ai/flux/schnell', {
           input: {
