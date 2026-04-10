@@ -153,12 +153,14 @@ export interface ChatResult extends AiCallResult {}
 
 export async function runChatPrompt(
   prompt: string,
-  context?: string
+  context?: string,
+  images?: string[]
 ): Promise<ChatResult> {
   const result = await runAiPrompt(
     'chat',
     USER_PROMPTS.chat(prompt, context),
-    SYSTEM_PROMPTS.chat
+    SYSTEM_PROMPTS.chat,
+    images
   )
   return result
 }

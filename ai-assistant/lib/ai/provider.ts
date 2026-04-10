@@ -112,9 +112,19 @@ async function callMock(promptKey: string): Promise<AiCallResult> {
   }
 }
 
-async function callOpenAI(prompt: string, systemPrompt: string): Promise<AiCallResult> {
+async function callOpenAI(prompt: string, systemPrompt: string, images?: string[]): Promise<AiCallResult> {
   const start = Date.now()
   const model = process.env.OPENAI_MODEL ?? 'gpt-4o'
+
+  const userContent: any[] = [{ type: 'text', text: prompt }]
+  if (images && images.length > 0) {
+    images.forEach(img => {
+      userContent.push({
+        type: 'image_url',
+        image_url: { url: img }
+      })
+    })
+  }
 
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
@@ -127,7 +137,7 @@ async function callOpenAI(prompt: string, systemPrompt: string): Promise<AiCallR
       max_tokens: 4096,
       messages: [
         { role: 'system', content: systemPrompt },
-        { role: 'user', content: prompt },
+        { role: 'user', content: userContent },
       ],
     }),
   })
@@ -179,12 +189,14 @@ async function callGemini(prompt: string, systemPrompt: string): Promise<AiCallR
 export async function runAiPrompt(
   promptKey: string,
   userPrompt: string,
-  systemPrompt: string
+  systemPrompt: string,
+  images?: string[] // Base64 image strings
 ): Promise<AiCallResult> {
   const provider = getProvider()
-  if (provider === 'anthropic') return callAnthropic(userPrompt, systemPrompt)
-  if (provider === 'openai') return callOpenAI(userPrompt, systemPrompt)
-  if (provider === 'gemini') return callGemini(userPrompt, systemPrompt)
+  
+  if (provider === 'openai') return callOpenAI(userPrompt, systemPrompt, images)
+  if (provider === 'gemini') return callGemini(userPrompt, systemPrompt, images)
+  if (provider === 'anthropic') return callAnthropic(userPrompt, systemPrompt, images)
 
   if (provider === 'together') {
     return callOpenAiCompatible(

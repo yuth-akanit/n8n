@@ -12,8 +12,8 @@ export async function POST(request: Request) {
   }
 
   try {
-    const body = await request.json() as { prompt: string; context?: string }
-    const { prompt, context } = body
+    const body = await request.json() as { prompt: string; context?: string; images?: string[] }
+    const { prompt, context, images } = body
 
     if (!prompt) {
       return NextResponse.json({ error: 'prompt is required' }, { status: 400 })
@@ -60,7 +60,7 @@ export async function POST(request: Request) {
       }
     }
 
-    const result = await runChatPrompt(prompt, finalContext)
+    const result = await runChatPrompt(prompt, finalContext, images)
     const latency = Date.now() - start
 
     const { data: runRecord } = await supabase
@@ -73,7 +73,7 @@ export async function POST(request: Request) {
         provider: result.provider,
         model: result.model,
         status: 'success',
-        input_json: { prompt, context },
+        input_json: { prompt, context, images_count: images?.length ?? 0 },
         output_json: { content: result.content },
         latency_ms: latency,
         finished_at: new Date().toISOString(),
