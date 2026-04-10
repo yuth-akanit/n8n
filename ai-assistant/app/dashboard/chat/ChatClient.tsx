@@ -55,13 +55,43 @@ export function ChatClient({ workspaceId }: { workspaceId: string }) {
     setPreviews(prev => prev.filter((_, i) => i !== index))
   }
 
+  // Resize image to max dimensions and return base64
+  function resizeImageToBase64(file: File, maxSize = 800): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const img = document.createElement('img')
+      const url = URL.createObjectURL(file)
+      img.onload = () => {
+        URL.revokeObjectURL(url)
+        const canvas = document.createElement('canvas')
+        let { width, height } = img
+        if (width > maxSize || height > maxSize) {
+          if (width > height) {
+            height = Math.round((height * maxSize) / width)
+            width = maxSize
+          } else {
+            width = Math.round((width * maxSize) / height)
+            height = maxSize
+          }
+        }
+        canvas.width = width
+        canvas.height = height
+        const ctx = canvas.getContext('2d')
+        if (!ctx) { reject(new Error('No canvas context')); return }
+        ctx.drawImage(img, 0, 0, width, height)
+        resolve(canvas.toDataURL('image/jpeg', 0.7))
+      }
+      img.onerror = () => reject(new Error('Failed to load image'))
+      img.src = url
+    })
+  }
+
   async function handleSend(e: React.FormEvent) {
     e.preventDefault()
     if (!prompt.trim() && attachments.length === 0) return
 
     const currentPrompt = prompt
     const curAttachments = [...previews]
-    const curFiles = [...attachments] // Save File objects BEFORE clearing state!
+    const curFiles = [...attachments]
     
     setPrompt('')
     setAttachments([])
@@ -71,13 +101,11 @@ export function ChatClient({ workspaceId }: { workspaceId: string }) {
     setLoading(true)
 
     try {
-      // Convert saved File objects to Base64
-      const attachmentBase64 = await Promise.all(
-        curFiles.map(file => new Promise<string>((resolve) => {
-          const reader = new FileReader()
-          reader.onloadend = () => resolve(reader.result as string)
-          reader.readAsDataURL(file)
-        }))
+      // Resize and compress images before sending
+      const imageBase64 = await Promise.all(
+        curFiles
+          .filter(f => f.type.startsWith('image/'))
+          .map(f => resizeImageToBase64(f))
       )
 
       const res = await fetch('/api/ai/chat', {
@@ -85,8 +113,8 @@ export function ChatClient({ workspaceId }: { workspaceId: string }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           workspaceId,
-          prompt: currentPrompt,
-          images: attachmentBase64.filter(s => s.startsWith('data:image')),
+          prompt: currentPrompt || 'อธิบายรูปภาพนี้',
+          images: imageBase64,
         }),
       })
       const data = await res.json()

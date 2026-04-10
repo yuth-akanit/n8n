@@ -63,6 +63,7 @@ export async function POST(request: Request) {
         console.warn('[Chat] Tavily search failed:', tavilyErr)
       }
     }
+    console.log(`[Chat] prompt="${prompt.slice(0,50)}" images=${images?.length ?? 0} provider=${process.env.AI_PROVIDER || 'auto'}`)
 
     const result = await runChatPrompt(prompt, finalContext, images)
     const latency = Date.now() - start
