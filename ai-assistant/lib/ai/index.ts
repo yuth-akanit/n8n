@@ -108,11 +108,12 @@ export interface SeoSummaryResult extends AiCallResult {
 
 export async function runSeoSummaryPrompt(
   pageData: Record<string, unknown>,
-  issues: Array<{ issue_type: string; message: string }>
+  issues: Array<{ issue_type: string; message: string }>,
+  competitorContext?: string
 ): Promise<SeoSummaryResult> {
   const result = await runAiPrompt(
     'seo',
-    USER_PROMPTS.seo(pageData, issues),
+    USER_PROMPTS.seo(pageData, issues, competitorContext),
     SYSTEM_PROMPTS.seo
   )
   return { ...result, summary: result.content }
@@ -146,4 +147,18 @@ export async function runSeoPatchPrompt(
   }
 
   return { ...result, patches }
+}
+
+export interface ChatResult extends AiCallResult {}
+
+export async function runChatPrompt(
+  prompt: string,
+  context?: string
+): Promise<ChatResult> {
+  const result = await runAiPrompt(
+    'chat',
+    USER_PROMPTS.chat(prompt, context),
+    SYSTEM_PROMPTS.chat
+  )
+  return result
 }

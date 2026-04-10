@@ -3,7 +3,7 @@
  * Falls back to deterministic mock responses when no API key is configured.
  */
 
-export type AiProvider = 'anthropic' | 'openai' | 'gemini' | 'mock'
+export type AiProvider = 'anthropic' | 'openai' | 'gemini' | 'together' | 'kie' | 'mock'
 
 export interface AiCallResult {
   content: string
@@ -17,10 +17,46 @@ function getProvider(): AiProvider {
   if (selected === 'mock') return 'mock'
   if (selected === 'openai' && process.env.OPENAI_API_KEY) return 'openai'
   if (selected === 'gemini' && process.env.GEMINI_API_KEY) return 'gemini'
+  if (selected === 'together' && process.env.TOGETHER_API_KEY) return 'together'
+  if (selected === 'kie' && process.env.KIE_API_KEY) return 'kie'
   if (process.env.ANTHROPIC_API_KEY) return 'anthropic'
   if (process.env.OPENAI_API_KEY) return 'openai'
   if (process.env.GEMINI_API_KEY) return 'gemini'
   return 'mock'
+}
+
+async function callOpenAiCompatible(
+  prompt: string, 
+  systemPrompt: string, 
+  apiKey: string, 
+  baseUrl: string, 
+  model: string, 
+  providerName: AiProvider
+): Promise<AiCallResult> {
+  const start = Date.now()
+  const response = await fetch(`${baseUrl}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: prompt }
+      ]
+    })
+  })
+  
+  if (!response.ok) {
+    const err = await response.text()
+    throw new Error(`${providerName} API error ${response.status}: ${err}`)
+  }
+  
+  const data = await response.json()
+  const content = data.choices[0]?.message?.content ?? ''
+  return { content, provider: providerName, model, latency_ms: Date.now() - start }
 }
 
 async function callAnthropic(prompt: string, systemPrompt: string): Promise<AiCallResult> {
@@ -64,6 +100,7 @@ async function callMock(promptKey: string): Promise<AiCallResult> {
     project: MOCK_PROJECT_RESPONSE,
     builder: MOCK_BUILDER_RESPONSE,
     seo: MOCK_SEO_RESPONSE,
+    chat: 'สวัสดีครับ ผมคือ AI ของคุณ สามารถถามตอบได้ทุกเรื่องเลยครับ (ระบบตอนรันบน Mock Mode)'
   }
 
   const key = Object.keys(mocks).find((k) => promptKey.startsWith(k)) ?? 'ideas'
@@ -148,6 +185,26 @@ export async function runAiPrompt(
   if (provider === 'anthropic') return callAnthropic(userPrompt, systemPrompt)
   if (provider === 'openai') return callOpenAI(userPrompt, systemPrompt)
   if (provider === 'gemini') return callGemini(userPrompt, systemPrompt)
+
+  if (provider === 'together') {
+    return callOpenAiCompatible(
+      userPrompt, systemPrompt, 
+      process.env.TOGETHER_API_KEY!, 
+      'https://api.together.xyz/v1', 
+      process.env.TOGETHER_MODEL || 'meta-llama/Llama-2-70b-chat-hf', 
+      'together'
+    )
+  }
+  
+  if (provider === 'kie') {
+    return callOpenAiCompatible(
+      userPrompt, systemPrompt, 
+      process.env.KIE_API_KEY!, 
+      process.env.KIE_BASE_URL || 'https://api.kie.ai/v1', 
+      process.env.KIE_MODEL || 'llama-3', 
+      'kie'
+    )
+  }
   return callMock(promptKey)
 }
 

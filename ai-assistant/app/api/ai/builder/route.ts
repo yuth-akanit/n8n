@@ -58,7 +58,28 @@ export async function POST(request: Request) {
       metadata: { mode },
     })
 
-    const result = await runBuilderPrompt(mode, prompt)
+    let result = await runBuilderPrompt(mode, prompt)
+    
+    // Auto-generate UI mockup via Fal.ai if generating a UI Plan
+    if (mode === 'ui' && process.env.FAL_KEY) {
+      try {
+        const { fal } = await import('@fal-ai/serverless-client')
+        fal.config({ credentials: process.env.FAL_KEY })
+        const falResult = (await fal.subscribe('fal-ai/flux/schnell', {
+          input: {
+            prompt: `Professional UI mockup design for: ${prompt}. Dribbble style, high quality UI/UX, clean interface.`,
+            image_size: 'landscape_16_9'
+          }
+        })) as { images: Array<{ url: string }> }
+        
+        if (falResult.images?.[0]?.url) {
+          result.content = `![UI Mockup](${falResult.images[0].url})\n\n---\n\n${result.content}`
+        }
+      } catch (falErr) {
+        console.warn('[Builder] fal.ai image generation failed:', falErr)
+      }
+    }
+
     const latency = Date.now() - start
 
     const { data: runRecord } = await supabase

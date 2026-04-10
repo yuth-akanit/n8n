@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  ai-assistant:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ai_assistant_web
+    restart: unless-stopped
+    ports:
+      - "3006:3000"
+    environment:
+      # Next.js & Server configs
+      - NODE_ENV=production
+      
+      # Supabase integration
+      - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
+      - NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      
+      # AI Provider configurations
+      - AI_PROVIDER=${AI_PROVIDER:-openai}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o-mini}
+      - TOGETHER_API_KEY=${TOGETHER_API_KEY}
+      - TOGETHER_MODEL=${TOGETHER_MODEL}
+      - KIE_API_KEY=${KIE_API_KEY}
+      - KIE_MODEL=${KIE_MODEL}
+      - KIE_BASE_URL=${KIE_BASE_URL}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+
+      # Advanced APIs
+      - TAVILY_API_KEY=${TAVILY_API_KEY}
+      - PINECONE_API_KEY=${PINECONE_API_KEY}
+      - PINECONE_INDEX=${PINECONE_INDEX}
+      - FAL_KEY=${FAL_KEY}
+    
+    # Optional: ensure it mounts .env.local on the server
+    env_file:
+      - .env.local

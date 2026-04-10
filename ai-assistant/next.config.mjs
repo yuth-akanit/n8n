@@ -1,6 +1,7 @@
 
 
 const nextConfig = {
+  output: 'standalone',
   experimental: {
     serverComponentsExternalPackages: [],
   },

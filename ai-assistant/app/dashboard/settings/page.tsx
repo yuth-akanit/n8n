@@ -55,9 +55,13 @@ export default async function SettingsPage() {
           <dl className="space-y-2 text-sm">
             <SettingRow
               label="AI Provider"
-              value={process.env.AI_PROVIDER === 'anthropic' && process.env.ANTHROPIC_API_KEY
-                ? 'Anthropic (live)'
-                : 'Mock (no key configured)'}
+              value={
+                process.env.AI_PROVIDER === 'openai' && process.env.OPENAI_API_KEY ? 'OpenAI (live)' :
+                process.env.AI_PROVIDER === 'together' && process.env.TOGETHER_API_KEY ? 'Together.ai (live)' :
+                process.env.AI_PROVIDER === 'kie' && process.env.KIE_API_KEY ? 'KIE AI (live)' :
+                process.env.AI_PROVIDER === 'anthropic' && process.env.ANTHROPIC_API_KEY ? 'Anthropic (live)' :
+                'Mock (no key configured)'
+              }
             />
             <SettingRow label="Supabase URL" value={process.env.NEXT_PUBLIC_SUPABASE_URL ?? 'Not set'} />
           </dl>
@@ -72,8 +76,21 @@ export default async function SettingsPage() {
             <p>NEXT_PUBLIC_SUPABASE_ANON_KEY</p>
             <p>SUPABASE_SERVICE_ROLE_KEY</p>
             <p className="pt-2 text-gray-400"># Optional — defaults to mock</p>
+            <p>AI_PROVIDER=openai /* openai, together, kie, anthropic, mock */</p>
+            <p className="pt-2 text-gray-400"># AI Providers</p>
+            <p>OPENAI_API_KEY</p>
+            <p>OPENAI_MODEL</p>
+            <p>TOGETHER_API_KEY</p>
+            <p>TOGETHER_MODEL</p>
+            <p>KIE_API_KEY</p>
+            <p>KIE_MODEL</p>
+            <p>KIE_BASE_URL</p>
             <p>ANTHROPIC_API_KEY</p>
-            <p>AI_PROVIDER=anthropic</p>
+            <p className="pt-2 text-gray-400"># Additional Services</p>
+            <p>TAVILY_API_KEY</p>
+            <p>PINECONE_API_KEY</p>
+            <p>PINECONE_INDEX</p>
+            <p>FAL_KEY</p>
           </div>
         </div>
 
@@ -85,6 +102,7 @@ export default async function SettingsPage() {
               { name: 'Project Planner', path: '/dashboard/projects' },
               { name: 'Builder Studio', path: '/dashboard/builder' },
               { name: 'SEO Doctor', path: '/dashboard/seo' },
+              { name: 'AI Chat', path: '/dashboard/chat' },
             ].map((m) => (
               <li key={m.name} className="flex justify-between">
                 <span className="text-gray-700">{m.name}</span>

@@ -6,22 +6,30 @@ export const SYSTEM_PROMPTS = {
   ideas: `You are a business idea advisor for a service business team.
 Generate practical, actionable ideas in response to the user's brief.
 Always respond with valid JSON matching the specified schema.
-Focus on ideas that can realistically be implemented by a small internal team.`,
+Focus on ideas that can realistically be implemented by a small internal team.
+You must respond strictly in Thai language in all textual content.`,
 
   project: `You are a senior project manager and software architect.
 Generate a structured project plan with milestones, tasks, and documentation.
 Always respond with valid JSON matching the specified schema.
-Be practical and specific — not generic.`,
+Be practical and specific — not generic.
+You must respond strictly in Thai language in all textual content.`,
 
   builder: `You are a senior full-stack engineer.
 Generate clean, production-ready code and technical artifacts.
 Include comments where helpful but avoid over-engineering.
-Output well-structured code with proper TypeScript types.`,
+Output well-structured code with proper TypeScript types.
+You must respond strictly in Thai language in all explanations, comments, and documentation.`,
 
   seo: `You are an expert SEO consultant with 10+ years of experience.
 Analyze the provided page data and give a practical, prioritized summary.
 Focus on actionable improvements that will have real impact.
-Be specific about what to change and why.`,
+Be specific about what to change and why.
+You must respond strictly in Thai language.`,
+
+  chat: `You are a helpful, extremely knowledgeable AI assistant capable of discussing any topic in the world and beyond.
+Answer questions accurately, constructively, and nicely. 
+You must respond strictly in Thai language in all textual content unless asked otherwise.`,
 }
 
 export const USER_PROMPTS = {
@@ -86,7 +94,7 @@ Request: ${prompt}
 
 Generate the requested ${mode} artifact. Be thorough and production-ready.`,
 
-  seo: (pageData: Record<string, unknown>, issues: Array<{ issue_type: string; message: string }>) => `
+  seo: (pageData: Record<string, unknown>, issues: Array<{ issue_type: string; message: string }>, competitorContext?: string) => `
 Page URL: ${pageData.url}
 Title: ${pageData.title ?? 'MISSING'}
 Meta Description: ${pageData.meta_description ?? 'MISSING'}
@@ -98,7 +106,8 @@ Status Code: ${pageData.status_code}
 Detected Issues:
 ${issues.map((i) => `- [${i.issue_type}] ${i.message}`).join('\n')}
 
-Provide a concise SEO analysis and prioritized recommendations (plain text, not JSON).`,
+${competitorContext ? `Competitor/Search Context (Tavily):\n${competitorContext}\n` : ''}
+Provide a concise SEO analysis and prioritized recommendations (plain text, not JSON). Compare against competitors if context is provided.`,
 
   seoPatch: (pageData: Record<string, unknown>, issues: Array<{ issue_type: string; message: string }>) => `
 Page data:
@@ -118,4 +127,8 @@ Generate specific patch suggestions in JSON:
     }
   ]
 }`,
+
+  chat: (prompt: string, context?: string) => `
+${context ? `Context:\n${context}\n\n` : ''}User request:
+${prompt}`
 }

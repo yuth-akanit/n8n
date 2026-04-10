@@ -62,6 +62,7 @@ export default async function DashboardPage() {
           { label: 'New Project', href: '/dashboard/projects/new', color: 'bg-blue-50 border-blue-200 text-blue-800 hover:bg-blue-100' },
           { label: 'Open Builder', href: '/dashboard/builder', color: 'bg-indigo-50 border-indigo-200 text-indigo-800 hover:bg-indigo-100' },
           { label: 'SEO Audit', href: '/dashboard/seo', color: 'bg-green-50 border-green-200 text-green-800 hover:bg-green-100' },
+          { label: 'AI Chat (ทุกเรื่อง)', href: '/dashboard/chat', color: 'bg-purple-50 border-purple-200 text-purple-800 hover:bg-purple-100' },
         ].map((a) => (
           <Link key={a.href} href={a.href}
             className={`card border px-4 py-3 text-sm font-medium text-center transition-colors ${a.color}`}>

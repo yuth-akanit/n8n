@@ -109,13 +109,33 @@ export async function POST(request: Request) {
     // AI summary — best-effort
     let aiSummary = ''
     try {
+      let competitorContext = ''
+      if (process.env.TAVILY_API_KEY && (pageData.title || pageData.h1)) {
+        try {
+          const { tavily } = await import('@tavily/core')
+          const tvly = tavily({ apiKey: process.env.TAVILY_API_KEY })
+          const query = pageData.h1 ?? pageData.title ?? ''
+          // Fetches context from top related search results
+          competitorContext = await tvly.searchContext(query, {
+            searchDepth: 'basic',
+          })
+          
+          if (typeof competitorContext !== 'string') {
+            competitorContext = JSON.stringify(competitorContext)
+          }
+        } catch (tavilyErr) {
+          console.warn('[SEO] Tavily search failed:', tavilyErr)
+        }
+      }
+
       const summaryResult = await runSeoSummaryPrompt(
         {
           url: pageData.url, title: pageData.title, meta_description: pageData.meta_description,
           h1: pageData.h1, canonical_url: pageData.canonical_url,
           word_count: pageData.word_count, status_code: pageData.status_code,
         },
-        ruleIssues.map((i) => ({ issue_type: i.issue_type, message: i.message }))
+        ruleIssues.map((i) => ({ issue_type: i.issue_type, message: i.message })),
+        competitorContext
       )
       aiSummary = summaryResult.summary
     } catch {
