@@ -207,7 +207,21 @@ export async function runAiPrompt(
   systemPrompt: string,
   images?: string[] // Base64 image strings
 ): Promise<AiCallResult> {
-  const provider = getProvider()
+  let provider = getProvider()
+  
+  // If images are present, force a vision-capable provider
+  const hasImages = images && images.length > 0
+  const visionProviders = ['openai', 'anthropic', 'gemini']
+  
+  if (hasImages && !visionProviders.includes(provider)) {
+    console.log(`[AI] Provider "${provider}" does not support vision. Switching...`)
+    // Pick the first available vision provider
+    if (process.env.OPENAI_API_KEY) provider = 'openai'
+    else if (process.env.ANTHROPIC_API_KEY) provider = 'anthropic'
+    else if (process.env.GEMINI_API_KEY) provider = 'gemini'
+    else console.warn('[AI] No vision-capable provider available! Images will be ignored.')
+    console.log(`[AI] Switched to "${provider}" for vision`)
+  }
   
   if (provider === 'openai') return callOpenAI(userPrompt, systemPrompt, images)
   if (provider === 'gemini') return callGemini(userPrompt, systemPrompt, images)
