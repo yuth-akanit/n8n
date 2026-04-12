@@ -3,6 +3,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { requireApiAuth } from '@/lib/auth/server'
 import { runBuilderPrompt } from '@/lib/ai'
 import type { BuilderMode } from '@/types'
+import { getModulePrompt } from '@/lib/ai/module-prompts'
 
 export async function POST(request: Request) {
   let ctx
@@ -58,7 +59,8 @@ export async function POST(request: Request) {
       metadata: { mode },
     })
 
-    let result = await runBuilderPrompt(mode, prompt)
+    const modulePromptData = await getModulePrompt(supabase, ctx.workspaceId, 'builder_module_prompt')
+    let result = await runBuilderPrompt(mode, prompt, modulePromptData.text)
     
     // Auto-generate UI mockup via Fal.ai if generating a UI Plan
     if (mode === 'ui' && process.env.FAL_KEY) {

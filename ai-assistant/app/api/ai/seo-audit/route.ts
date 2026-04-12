@@ -4,6 +4,7 @@ import { requireApiAuth } from '@/lib/auth/server'
 import { fetchAndExtractPage } from '@/lib/seo/scraper'
 import { runSeoRules, computeSeoScore } from '@/lib/seo/rules'
 import { runSeoSummaryPrompt } from '@/lib/ai'
+import { getModulePrompt } from '@/lib/ai/module-prompts'
 import { requireUrl, optionalString } from '@/lib/api/validate'
 import { handleRouteError } from '@/lib/api/errors'
 import { resolveNextArtifactVersion } from '@/lib/artifacts'
@@ -132,6 +133,7 @@ export async function POST(request: Request) {
         }
       }
 
+      const seoModulePrompt = await getModulePrompt(supabase, ctx.workspaceId, 'seo_module_prompt')
       const summaryResult = await runSeoSummaryPrompt(
         {
           url: pageData.url, title: pageData.title, meta_description: pageData.meta_description,
@@ -139,7 +141,8 @@ export async function POST(request: Request) {
           word_count: pageData.word_count, status_code: pageData.status_code,
         },
         ruleIssues.map((i) => ({ issue_type: i.issue_type, message: i.message })),
-        competitorContext
+        competitorContext,
+        seoModulePrompt.text
       )
       aiSummary = summaryResult.summary
     } catch {

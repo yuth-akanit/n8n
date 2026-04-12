@@ -4,6 +4,7 @@ import { getAuthContext } from '@/lib/auth/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { WorkspaceContextEditor } from './WorkspaceContextEditor'
+import { ModulePromptsEditor } from './ModulePromptsEditor'
 
 export default async function SettingsPage() {
   const ctx = await getAuthContext()
@@ -57,6 +58,9 @@ export default async function SettingsPage() {
             }}
           />
         </div>
+
+        {/* ── Module System Prompts ────────────────────────── */}
+        <ModulePromptsEditor />
 
         {/* ── Cron / Scheduled Runs ────────────────────────── */}
         <div className="card p-5">

@@ -2,7 +2,10 @@
   "permissions": {
     "allow": [
       "mcp__Claude_Preview__preview_start",
-      "WebFetch(domain:ai-workspace.paaair.online)"
+      "WebFetch(domain:ai-workspace.paaair.online)",
+      "Bash(npm install:*)",
+      "Bash(npx tsc:*)",
+      "Bash(grep -v \"^$\")"
     ]
   }
 }

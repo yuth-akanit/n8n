@@ -7,6 +7,7 @@ import { handleRouteError } from '@/lib/api/errors'
 import { resolveNextArtifactVersion } from '@/lib/artifacts'
 import { embedArtifact } from '@/lib/ai/rag'
 import { getWorkspaceContext } from '@/lib/ai/workspace-context'
+import { getModulePrompt } from '@/lib/ai/module-prompts'
 
 export async function POST(request: Request) {
   let ctx
@@ -46,8 +47,11 @@ export async function POST(request: Request) {
       metadata: { constraints },
     })
 
-    const wsContext = await getWorkspaceContext(supabase, workspaceId)
-    const result = await runIdeaPrompt(prompt, constraints, wsContext)
+    const [wsContext, modulePromptData] = await Promise.all([
+      getWorkspaceContext(supabase, workspaceId),
+      getModulePrompt(supabase, workspaceId, 'idea_module_prompt'),
+    ])
+    const result = await runIdeaPrompt(prompt, constraints, wsContext, modulePromptData.text)
     const latency = Date.now() - start
 
     const { data: runRecord } = await supabase

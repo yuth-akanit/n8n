@@ -30,12 +30,14 @@ export interface IdeaRunResult extends AiCallResult {
 export async function runIdeaPrompt(
   prompt: string,
   constraints?: string,
-  wsContext?: string
+  wsContext?: string,
+  modulePrompt?: string
 ): Promise<IdeaRunResult> {
+  const base = modulePrompt || SYSTEM_PROMPTS.ideas
   const result = await runAiPrompt(
     'ideas',
     USER_PROMPTS.ideas(prompt, constraints),
-    withWorkspaceContext(SYSTEM_PROMPTS.ideas, wsContext ?? '')
+    withWorkspaceContext(base, wsContext ?? '')
   )
 
   let ideas: GeneratedIdea[] = []
@@ -106,12 +108,13 @@ export interface BuilderResult extends AiCallResult {
 
 export async function runBuilderPrompt(
   mode: BuilderMode,
-  prompt: string
+  prompt: string,
+  modulePrompt?: string
 ): Promise<BuilderResult> {
   const result = await runAiPrompt(
     'builder',
     USER_PROMPTS.builder(mode, prompt),
-    SYSTEM_PROMPTS.builder
+    modulePrompt || SYSTEM_PROMPTS.builder
   )
 
   const titles: Record<BuilderMode, string> = {
@@ -132,12 +135,13 @@ export interface SeoSummaryResult extends AiCallResult {
 export async function runSeoSummaryPrompt(
   pageData: Record<string, unknown>,
   issues: Array<{ issue_type: string; message: string }>,
-  competitorContext?: string
+  competitorContext?: string,
+  modulePrompt?: string
 ): Promise<SeoSummaryResult> {
   const result = await runAiPrompt(
     'seo',
     USER_PROMPTS.seo(pageData, issues, competitorContext),
-    SYSTEM_PROMPTS.seo
+    modulePrompt || SYSTEM_PROMPTS.seo
   )
   return { ...result, summary: result.content }
 }
@@ -217,10 +221,13 @@ export async function runTagPrompt(text: string): Promise<string[]> {
 export async function* streamChat(
   messages: ChatMessage[],
   context?: string,
-  images?: string[]
+  images?: string[],
+  /** Optional fully-composed system prompt (workspace ctx + module prompt) */
+  systemPromptOverride?: string
 ): AsyncGenerator<string> {
+  const base = systemPromptOverride || SYSTEM_PROMPTS.chat
   const systemPrompt = context
-    ? `${SYSTEM_PROMPTS.chat}\n\n---\nข้อมูลอ้างอิง (ใช้เป็น source of truth สำหรับราคา ข้อมูลเฉพาะของบริษัท และรายละเอียดต่างๆ):\n${context}`
-    : SYSTEM_PROMPTS.chat
+    ? `${base}\n\n---\nข้อมูลอ้างอิง (ใช้เป็น source of truth สำหรับราคา ข้อมูลเฉพาะของบริษัท และรายละเอียดต่างๆ):\n${context}`
+    : base
   yield* streamAiChat(messages, systemPrompt, images)
 }

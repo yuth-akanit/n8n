@@ -5,6 +5,8 @@ import { requireString, optionalString } from '@/lib/api/validate'
 import { handleRouteError } from '@/lib/api/errors'
 import { findRelevantContext } from '@/lib/ai/rag'
 import { queryPineconeAssistant } from '@/lib/ai/pinecone-assistant'
+import { getModulePrompt, composeSystemPrompt } from '@/lib/ai/module-prompts'
+import { getWorkspaceContext } from '@/lib/ai/workspace-context'
 
 export const maxDuration = 120 // seconds — streaming needs longer window
 export const dynamic = 'force-dynamic'
@@ -106,7 +108,13 @@ export async function POST(request: Request) {
       ...(images?.length ? { metadata: { images_count: images.length } } : {}),
     })
 
-    // Build message history for the AI call
+    // Load module prompt + workspace context
+    const [modulePromptData, wsContext] = await Promise.all([
+      getModulePrompt(supabase, workspaceId, 'chat_module_prompt'),
+      getWorkspaceContext(supabase, workspaceId),
+    ])
+
+    // Build runtime context (RAG + Pinecone + Tavily)
     const contextNote = `[วันเวลา: ${new Date().toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' })}]`
     let finalContext = contextNote
     if (context) finalContext = `${context}\n\n${contextNote}`
@@ -135,6 +143,9 @@ export async function POST(request: Request) {
       }
     }
 
+    // Compose system prompt: workspaceContext → modulePrompt → runtime context
+    const composedSystemPrompt = composeSystemPrompt([wsContext, modulePromptData.text])
+
     const aiMessages: ChatMessage[] = [
       ...historyMessages,
       { role: 'user', content: prompt },
@@ -153,7 +164,7 @@ export async function POST(request: Request) {
         }
 
         try {
-          for await (const chunk of streamChat(aiMessages, finalContext, images)) {
+          for await (const chunk of streamChat(aiMessages, finalContext, images, composedSystemPrompt)) {
             fullContent += chunk
             send({ text: chunk })
           }
