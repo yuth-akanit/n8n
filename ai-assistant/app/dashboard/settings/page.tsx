@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import { getAuthContext } from '@/lib/auth/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { PageHeader } from '@/components/ui/PageHeader'
+import { WorkspaceContextEditor } from './WorkspaceContextEditor'
 
 export default async function SettingsPage() {
   const ctx = await getAuthContext()
@@ -20,6 +21,19 @@ export default async function SettingsPage() {
     .select('user_id, role, created_at')
     .eq('workspace_id', ctx.workspaceId)
 
+  const { data: wsContext } = await supabase
+    .from('workspace_context')
+    .select('title, content_md, is_active')
+    .eq('workspace_id', ctx.workspaceId)
+    .single()
+
+  const { data: cronRuns } = await supabase
+    .from('cron_runs')
+    .select('job_name, status, ran_at, result_json')
+    .eq('workspace_id', ctx.workspaceId)
+    .order('ran_at', { ascending: false })
+    .limit(10)
+
   return (
     <div>
       <PageHeader
@@ -27,7 +41,60 @@ export default async function SettingsPage() {
         description="Workspace configuration and environment info"
       />
 
-      <div className="max-w-xl space-y-4">
+      <div className="max-w-2xl space-y-4">
+
+        {/* ── Workspace Context Doc ─────────────────────────── */}
+        <div className="card p-5">
+          <h2 className="text-sm font-semibold text-gray-900 mb-1">Workspace Context / Brand Guide</h2>
+          <p className="text-xs text-gray-500 mb-4">
+            ข้อมูลนี้จะถูก inject อัตโนมัติใน system prompt ทุก AI module
+          </p>
+          <WorkspaceContextEditor
+            initial={{
+              title: wsContext?.title ?? 'Workspace Brief',
+              content_md: wsContext?.content_md ?? '',
+              is_active: wsContext?.is_active ?? true,
+            }}
+          />
+        </div>
+
+        {/* ── Cron / Scheduled Runs ────────────────────────── */}
+        <div className="card p-5">
+          <h2 className="text-sm font-semibold text-gray-900 mb-3">Scheduled AI Runs</h2>
+          <div className="bg-gray-50 rounded-lg p-4 font-mono text-xs space-y-1 text-gray-700 mb-4">
+            <p className="text-gray-400"># เพิ่มใน VPS crontab: crontab -e</p>
+            <p className="text-gray-400"># Weekly idea digest — ทุกวันจันทร์ 08:00</p>
+            <p>{'0 8 * * 1 curl -s -X POST https://ai-workspace.paaair.online/api/cron/idea-digest \\'}</p>
+            <p className="pl-4">{'-H "Authorization: Bearer $CRON_SECRET"'}</p>
+            <p className="text-gray-400 mt-2"># SEO re-audit — ทุกอาทิตย์ 02:00</p>
+            <p>{'0 2 * * 0 curl -s -X POST https://ai-workspace.paaair.online/api/cron/seo-audit \\'}</p>
+            <p className="pl-4">{'-H "Authorization: Bearer $CRON_SECRET"'}</p>
+          </div>
+          <p className="text-xs text-gray-500 mb-4">
+            ต้องตั้ง env: <code className="bg-gray-100 px-1 rounded">CRON_SECRET</code>,{' '}
+            <code className="bg-gray-100 px-1 rounded">LINE_NOTIFY_TOKEN</code>,{' '}
+            <code className="bg-gray-100 px-1 rounded">RESEND_API_KEY</code>
+          </p>
+          {cronRuns && cronRuns.length > 0 && (
+            <div>
+              <p className="text-xs font-semibold text-gray-600 mb-2">Recent runs</p>
+              <div className="space-y-1">
+                {cronRuns.map((run, i) => (
+                  <div key={i} className="flex items-center justify-between text-xs py-1 border-b border-gray-100 last:border-0">
+                    <span className="text-gray-700 font-medium">{run.job_name}</span>
+                    <div className="flex items-center gap-3">
+                      <span className={run.status === 'success' ? 'text-green-600' : run.status === 'skipped' ? 'text-gray-400' : 'text-red-500'}>
+                        {run.status}
+                      </span>
+                      <span className="text-gray-400">{new Date(run.ran_at).toLocaleString('th-TH')}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
         {/* Workspace info */}
         <div className="card p-5">
           <h2 className="text-sm font-semibold text-gray-900 mb-3">Workspace</h2>

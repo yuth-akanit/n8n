@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/Badge'
 import { formatDate } from '@/lib/utils'
 import type { Idea } from '@/types'
 import { PromoteToProjectButton } from './PromoteToProjectButton'
+import { RefineClient } from './RefineClient'
 
 interface Props {
   params: { id: string }
@@ -73,6 +74,9 @@ export default async function IdeaDetailPage({ params }: Props) {
               <p className="text-gray-900 text-sm">{i.audience}</p>
             </div>
           )}
+
+          {/* Multi-turn refinement chat */}
+          <RefineClient ideaId={i.id} />
         </div>
 
         {/* Sidebar */}

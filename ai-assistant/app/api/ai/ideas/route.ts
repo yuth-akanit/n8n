@@ -6,6 +6,7 @@ import { requireString, optionalString } from '@/lib/api/validate'
 import { handleRouteError } from '@/lib/api/errors'
 import { resolveNextArtifactVersion } from '@/lib/artifacts'
 import { embedArtifact } from '@/lib/ai/rag'
+import { getWorkspaceContext } from '@/lib/ai/workspace-context'
 
 export async function POST(request: Request) {
   let ctx
@@ -45,7 +46,8 @@ export async function POST(request: Request) {
       metadata: { constraints },
     })
 
-    const result = await runIdeaPrompt(prompt, constraints)
+    const wsContext = await getWorkspaceContext(supabase, workspaceId)
+    const result = await runIdeaPrompt(prompt, constraints, wsContext)
     const latency = Date.now() - start
 
     const { data: runRecord } = await supabase

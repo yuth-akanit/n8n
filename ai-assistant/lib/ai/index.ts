@@ -3,6 +3,7 @@
  */
 import { runAiPrompt, streamAiChat, type AiCallResult, type ChatMessage } from './provider'
 import { SYSTEM_PROMPTS, USER_PROMPTS } from './prompts'
+import { withWorkspaceContext } from './workspace-context'
 import type { BuilderMode, GeneratedIdea, GeneratedMilestone, GeneratedDoc } from '@/types'
 
 export type { ChatMessage }
@@ -21,12 +22,13 @@ export interface IdeaRunResult extends AiCallResult {
 
 export async function runIdeaPrompt(
   prompt: string,
-  constraints?: string
+  constraints?: string,
+  wsContext?: string
 ): Promise<IdeaRunResult> {
   const result = await runAiPrompt(
     'ideas',
     USER_PROMPTS.ideas(prompt, constraints),
-    SYSTEM_PROMPTS.ideas
+    withWorkspaceContext(SYSTEM_PROMPTS.ideas, wsContext ?? '')
   )
 
   let ideas: GeneratedIdea[] = []
@@ -59,12 +61,13 @@ export interface ProjectPlanResult extends AiCallResult {
 
 export async function runProjectPlannerPrompt(
   goal: string,
-  scope?: string
+  scope?: string,
+  wsContext?: string
 ): Promise<ProjectPlanResult> {
   const result = await runAiPrompt(
     'project',
     USER_PROMPTS.project(goal, scope),
-    SYSTEM_PROMPTS.project
+    withWorkspaceContext(SYSTEM_PROMPTS.project, wsContext ?? '')
   )
 
   let summary = ''

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { requireApiAuth } from '@/lib/auth/server'
 import { runProjectPlannerPrompt } from '@/lib/ai'
+import { getWorkspaceContext } from '@/lib/ai/workspace-context'
 import { requireString, requireUuid, optionalString } from '@/lib/api/validate'
 import { handleRouteError } from '@/lib/api/errors'
 import { resolveNextArtifactVersion } from '@/lib/artifacts'
@@ -58,7 +59,8 @@ export async function POST(request: Request) {
       metadata: { scope },
     })
 
-    const result = await runProjectPlannerPrompt(goal, scope)
+    const wsContext = await getWorkspaceContext(supabase, workspaceId)
+    const result = await runProjectPlannerPrompt(goal, scope, wsContext)
     const latency = Date.now() - start
 
     const { data: runRecord } = await supabase
