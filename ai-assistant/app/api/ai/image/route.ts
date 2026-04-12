@@ -104,7 +104,7 @@ export async function POST(request: Request) {
     const artifactIds: string[] = []
     for (const url of imageUrls) {
       const version = await resolveNextArtifactVersion(supabase, { workspaceId, artifactType: 'image' })
-      const { data: artifact } = await supabase
+      const { data: artifact, error: artifactErr } = await supabase
         .from('artifacts')
         .insert({
           workspace_id: workspaceId,
@@ -118,6 +118,7 @@ export async function POST(request: Request) {
         })
         .select('id')
         .single()
+      if (artifactErr) console.error('[api/ai/image] artifact save failed:', artifactErr.message)
       if (artifact?.id) artifactIds.push(artifact.id)
     }
 
