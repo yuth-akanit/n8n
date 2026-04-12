@@ -19,6 +19,9 @@ export default async function DashboardPage() {
     { data: artifacts },
     { data: tasks },
     { data: seoPatches },
+    { data: aiRuns },
+    { data: recentIdeas },
+    { data: recentAudits },
   ] = await Promise.all([
     supabase
       .from('projects')
@@ -44,6 +47,23 @@ export default async function DashboardPage() {
       .from('seo_patches')
       .select('id, patch_type, status, created_at, audit_id')
       .eq('status', 'proposed')
+      .order('created_at', { ascending: false })
+      .limit(5),
+    supabase
+      .from('ai_runs')
+      .select('id, module, prompt_key, status, created_at')
+      .eq('status', 'success')
+      .order('created_at', { ascending: false })
+      .limit(8),
+    supabase
+      .from('ideas')
+      .select('id, title, created_at')
+      .eq('workspace_id', workspaceId)
+      .order('created_at', { ascending: false })
+      .limit(5),
+    supabase
+      .from('seo_audits')
+      .select('id, target_url, score_overall, created_at')
       .order('created_at', { ascending: false })
       .limit(5),
   ])
@@ -167,6 +187,58 @@ export default async function DashboardPage() {
           )}
         </section>
       </div>
+
+      {/* Activity Feed */}
+      <section className="card p-4 mt-6">
+        <h2 className="text-sm font-semibold text-gray-900 mb-4">Activity Log</h2>
+        {(() => {
+          type ActivityItem = { key: string; label: string; sub: string; time: string; icon: string }
+          const items: ActivityItem[] = [
+            ...(recentIdeas ?? []).map(i => ({
+              key: `idea-${i.id}`,
+              label: `New idea: ${i.title}`,
+              sub: 'Idea Lab',
+              time: i.created_at,
+              icon: '💡',
+            })),
+            ...(recentAudits ?? []).map(a => ({
+              key: `audit-${a.id}`,
+              label: `SEO audit: ${a.target_url}`,
+              sub: a.score_overall !== null ? `Score ${a.score_overall}` : 'In progress',
+              time: a.created_at,
+              icon: '🔍',
+            })),
+            ...(aiRuns ?? []).map(r => ({
+              key: `run-${r.id}`,
+              label: `AI run: ${(r.module as string).replace(/_/g, ' ')}`,
+              sub: (r.prompt_key as string).replace(/_/g, ' '),
+              time: r.created_at,
+              icon: '🤖',
+            })),
+          ]
+            .sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime())
+            .slice(0, 12)
+
+          if (items.length === 0) {
+            return <p className="text-sm text-gray-400 text-center py-4">ยังไม่มี activity</p>
+          }
+
+          return (
+            <ul className="space-y-2">
+              {items.map((item) => (
+                <li key={item.key} className="flex items-start gap-3 py-1.5 border-b border-gray-50 last:border-0">
+                  <span className="text-base leading-none mt-0.5">{item.icon}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-gray-900 truncate">{item.label}</p>
+                    <p className="text-xs text-gray-400">{item.sub}</p>
+                  </div>
+                  <span className="text-xs text-gray-400 flex-shrink-0">{timeAgo(item.time)}</span>
+                </li>
+              ))}
+            </ul>
+          )
+        })()}
+      </section>
     </div>
   )
 }

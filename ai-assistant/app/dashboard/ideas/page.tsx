@@ -41,6 +41,13 @@ export default async function IdeasPage({ searchParams }: Props) {
         action={
           <div className="flex items-center gap-2">
             <SearchInput placeholder="Search ideas…" />
+            <a
+              href="/api/ideas/export"
+              download
+              className="btn-secondary text-sm"
+            >
+              Export CSV
+            </a>
             <Link href="/dashboard/ideas/new" className="btn-primary">+ New Idea</Link>
           </div>
         }

@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import type { SeoPatch } from '@/types'
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 
 interface Props {
   patches: SeoPatch[]
@@ -17,6 +18,7 @@ export function BulkPatchActions({ patches }: Props) {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState<'approve' | 'reject' | null>(null)
   const [error, setError] = useState('')
+  const [confirmReject, setConfirmReject] = useState(false)
 
   const proposed = patches.filter((p) => p.status === 'proposed')
   const allProposedSelected = proposed.length > 0 && proposed.every((p) => selected.has(p.id))
@@ -73,6 +75,15 @@ export function BulkPatchActions({ patches }: Props) {
 
   return (
     <div className="space-y-2">
+      <ConfirmDialog
+        open={confirmReject}
+        title={`ยืนยัน Reject ${selected.size} patches`}
+        message="Patches ที่เลือกจะถูก reject ทั้งหมด ไม่สามารถกู้คืนได้ ต้องการดำเนินการต่อหรือไม่?"
+        confirmLabel={`Reject ${selected.size} patches`}
+        danger
+        onConfirm={() => { setConfirmReject(false); void bulkAction('reject') }}
+        onCancel={() => setConfirmReject(false)}
+      />
       {error && (
         <div className="bg-red-50 border border-red-200 text-red-700 text-xs rounded px-3 py-2">
           {error}
@@ -91,7 +102,7 @@ export function BulkPatchActions({ patches }: Props) {
             {loading === 'approve' ? 'Approving…' : 'Approve All'}
           </button>
           <button
-            onClick={() => bulkAction('reject')}
+            onClick={() => setConfirmReject(true)}
             disabled={loading !== null}
             className="text-xs px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50"
           >
