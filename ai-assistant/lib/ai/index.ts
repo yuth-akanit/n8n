@@ -210,7 +210,7 @@ export async function* streamChat(
   images?: string[]
 ): AsyncGenerator<string> {
   const systemPrompt = context
-    ? `${SYSTEM_PROMPTS.chat}\n\nContext:\n${context}`
+    ? `${SYSTEM_PROMPTS.chat}\n\n---\nข้อมูลอ้างอิง (ใช้เป็น source of truth สำหรับราคา ข้อมูลเฉพาะของบริษัท และรายละเอียดต่างๆ):\n${context}`
     : SYSTEM_PROMPTS.chat
   yield* streamAiChat(messages, systemPrompt, images)
 }

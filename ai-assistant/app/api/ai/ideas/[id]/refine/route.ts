@@ -4,7 +4,8 @@
  */
 import { createServiceClient } from '@/lib/supabase/server'
 import { requireApiAuth } from '@/lib/auth/server'
-import { streamChat, type ChatMessage } from '@/lib/ai'
+import { type ChatMessage } from '@/lib/ai'
+import { streamAiChat } from '@/lib/ai/provider'
 import { requireString, optionalString } from '@/lib/api/validate'
 import { handleRouteError } from '@/lib/api/errors'
 import { getWorkspaceContext, withWorkspaceContext } from '@/lib/ai/workspace-context'
@@ -119,7 +120,7 @@ When suggesting changes to the idea, be explicit about what field should change 
     // Enrich system prompt with Pinecone company documents if relevant
     const pineconeCtx = await queryPineconeAssistant(`${i.title} ${prompt}`)
     const enrichedSystemPrompt = pineconeCtx
-      ? `${systemPrompt}\n\n${pineconeCtx}`
+      ? `${systemPrompt}\n\n---\nข้อมูลอ้างอิง (ใช้เป็น source of truth สำหรับราคาและข้อมูลเฉพาะของบริษัท):\n${pineconeCtx}`
       : systemPrompt
 
     const aiMessages: ChatMessage[] = [
@@ -137,7 +138,7 @@ When suggesting changes to the idea, be explicit about what field should change 
         }
 
         try {
-          for await (const chunk of streamChat(aiMessages, enrichedSystemPrompt)) {
+          for await (const chunk of streamAiChat(aiMessages, enrichedSystemPrompt)) {
             fullContent += chunk
             send({ text: chunk })
           }
