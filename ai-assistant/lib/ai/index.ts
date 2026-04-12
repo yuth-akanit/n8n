@@ -8,12 +8,19 @@ import type { BuilderMode, GeneratedIdea, GeneratedMilestone, GeneratedDoc } fro
 
 export type { ChatMessage }
 
-/** Strip markdown code fences that some models add around JSON output */
-function stripCodeFences(text: string): string {
-  return text
-    .replace(/^```(?:json)?\s*/i, '')
-    .replace(/\s*```\s*$/, '')
-    .trim()
+/** Extract JSON from AI response — handles code fences, preamble text, etc. */
+function extractJson(text: string): string {
+  // Remove code fences anywhere in the text (not just start/end)
+  const fenced = text.replace(/```(?:json)?\s*/gi, '').replace(/```/g, '').trim()
+
+  // If it now starts with { or [, use it
+  if (fenced.startsWith('{') || fenced.startsWith('[')) return fenced
+
+  // Find the first { ... } block in the original text
+  const match = text.match(/\{[\s\S]*\}/)
+  if (match) return match[0]
+
+  return text.trim()
 }
 
 export interface IdeaRunResult extends AiCallResult {
@@ -33,7 +40,7 @@ export async function runIdeaPrompt(
 
   let ideas: GeneratedIdea[] = []
   try {
-    const parsed = JSON.parse(stripCodeFences(result.content)) as { ideas: GeneratedIdea[] }
+    const parsed = JSON.parse(extractJson(result.content)) as { ideas: GeneratedIdea[] }
     ideas = parsed.ideas ?? []
   } catch {
     // If AI didn't return valid JSON, wrap in a single idea
@@ -75,7 +82,7 @@ export async function runProjectPlannerPrompt(
   let docs: GeneratedDoc[] = []
 
   try {
-    const parsed = JSON.parse(stripCodeFences(result.content)) as {
+    const parsed = JSON.parse(extractJson(result.content)) as {
       summary?: string
       milestones?: GeneratedMilestone[]
       docs?: GeneratedDoc[]
@@ -153,7 +160,7 @@ export async function runSeoPatchPrompt(
 
   let patches: SeoPatchSuggestResult['patches'] = []
   try {
-    const parsed = JSON.parse(stripCodeFences(result.content)) as { patches: typeof patches }
+    const parsed = JSON.parse(extractJson(result.content)) as { patches: typeof patches }
     patches = parsed.patches ?? []
   } catch {
     patches = []
@@ -196,7 +203,7 @@ export async function runTagPrompt(text: string): Promise<string[]> {
       `Choose 3-5 tags from this list: ${TAG_CANDIDATES.join(', ')}\n\nContent:\n${text.slice(0, 400)}\n\nReturn raw JSON only: {"tags":["tag1","tag2"]}`,
       'You are a content classifier. Return raw JSON only, no explanation, no code fences.'
     )
-    const parsed = JSON.parse(stripCodeFences(result.content)) as { tags?: string[] }
+    const parsed = JSON.parse(extractJson(result.content)) as { tags?: string[] }
     return (parsed.tags ?? []).filter((t) => TAG_CANDIDATES.includes(t)).slice(0, 5)
   } catch {
     return []
