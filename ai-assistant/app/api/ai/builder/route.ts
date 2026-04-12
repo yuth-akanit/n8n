@@ -4,6 +4,7 @@ import { requireApiAuth } from '@/lib/auth/server'
 import { runBuilderPrompt } from '@/lib/ai'
 import type { BuilderMode } from '@/types'
 import { getModulePrompt } from '@/lib/ai/module-prompts'
+import { classifyBuilderIntent } from '@/lib/ai/intent-classifier'
 
 export async function POST(request: Request) {
   let ctx
@@ -20,6 +21,20 @@ export async function POST(request: Request) {
     if (!mode || !prompt) {
       return NextResponse.json({ error: 'mode and prompt are required' }, { status: 400 })
     }
+
+    // ── Intent Gate ──────────────────────────────────────────────────────────
+    // Classify the prompt before generating. If it's a vague business/marketing
+    // goal, return guided artifact options instead of generating immediately.
+    const classification = await classifyBuilderIntent(prompt)
+    if (classification.needs_gate) {
+      return NextResponse.json({
+        type: 'clarification',
+        intent: classification.intent,
+        message: classification.message,
+        options: classification.options,
+      })
+    }
+    // ─────────────────────────────────────────────────────────────────────────
 
     const supabase = createServiceClient()
     const { workspaceId, user } = ctx
@@ -61,7 +76,7 @@ export async function POST(request: Request) {
 
     const modulePromptData = await getModulePrompt(supabase, ctx.workspaceId, 'builder_module_prompt')
     let result = await runBuilderPrompt(mode, prompt, modulePromptData.text)
-    
+
     // Auto-generate UI mockup via Fal.ai if generating a UI Plan
     if (mode === 'ui' && process.env.FAL_KEY) {
       try {
@@ -73,7 +88,7 @@ export async function POST(request: Request) {
             image_size: 'landscape_16_9'
           }
         })) as { images: Array<{ url: string }> }
-        
+
         if (falResult.images?.[0]?.url) {
           result.content = `![UI Mockup](${falResult.images[0].url})\n\n---\n\n${result.content}`
         }
@@ -134,6 +149,7 @@ export async function POST(request: Request) {
       .single()
 
     return NextResponse.json({
+      type: 'artifact',
       sessionId: session.id,
       artifactId: artifact?.id,
       content: result.content,

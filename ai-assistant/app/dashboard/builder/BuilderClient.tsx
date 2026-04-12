@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { Badge } from '@/components/ui/Badge'
@@ -24,12 +24,34 @@ interface ArtifactPreview {
   content: string
 }
 
+interface ClarificationOption {
+  label: string
+  mode: BuilderMode
+  prompt: string
+}
+
+interface ClarificationResult {
+  type: 'clarification'
+  intent: string
+  message: string
+  options: ClarificationOption[]
+}
+
+interface ArtifactResult {
+  type: 'artifact'
+  content: string
+  title: string
+  artifactId: string
+  sessionId: string
+}
+
 export function BuilderClient({ workspaceId }: { workspaceId: string }) {
   const [mode, setMode] = useState<BuilderMode>('code_patch')
   const [prompt, setPrompt] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [result, setResult] = useState<{ content: string; title: string; artifactId: string } | null>(null)
+  const [artifact, setArtifact] = useState<ArtifactResult | null>(null)
+  const [clarification, setClarification] = useState<ClarificationResult | null>(null)
   const [recentArtifacts, setRecentArtifacts] = useState<ArtifactPreview[]>([])
 
   useEffect(() => {
@@ -37,32 +59,47 @@ export function BuilderClient({ workspaceId }: { workspaceId: string }) {
       .then(r => r.json())
       .then(data => setRecentArtifacts(Array.isArray(data) ? data : []))
       .catch(() => {})
-  }, [result])
+  }, [artifact])
 
-  async function handleGenerate(e: React.FormEvent) {
-    e.preventDefault()
+  const callBuilder = useCallback(async (targetMode: BuilderMode, targetPrompt: string) => {
     setError('')
-    setResult(null)
+    setArtifact(null)
+    setClarification(null)
     setLoading(true)
 
     try {
       const res = await fetch('/api/ai/builder', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          workspaceId,
-          mode,
-          prompt,
-        }),
+        body: JSON.stringify({ workspaceId, mode: targetMode, prompt: targetPrompt }),
       })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error ?? 'Generation failed')
-      setResult(data)
+      const data = await res.json() as ClarificationResult | ArtifactResult | { error?: string }
+
+      if (!res.ok) {
+        throw new Error((data as { error?: string }).error ?? 'Generation failed')
+      }
+
+      if ((data as ClarificationResult).type === 'clarification') {
+        setClarification(data as ClarificationResult)
+      } else {
+        setArtifact(data as ArtifactResult)
+      }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Something went wrong')
     } finally {
       setLoading(false)
     }
+  }, [workspaceId])
+
+  async function handleGenerate(e: React.FormEvent) {
+    e.preventDefault()
+    await callBuilder(mode, prompt)
+  }
+
+  async function handleOptionSelect(option: ClarificationOption) {
+    setMode(option.mode)
+    setPrompt(option.prompt)
+    await callBuilder(option.mode, option.prompt)
   }
 
   return (
@@ -118,25 +155,73 @@ export function BuilderClient({ workspaceId }: { workspaceId: string }) {
             </div>
             {error && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">{error}</p>}
             <button type="submit" className="btn-primary" disabled={loading || !prompt.trim()}>
-              {loading ? 'Generating…' : `Generate ${MODES.find(m => m.value === mode)?.label}`}
+              {loading ? 'Analysing…' : `Generate ${MODES.find(m => m.value === mode)?.label}`}
             </button>
           </form>
 
           {loading && (
             <div className="card p-8 text-center">
               <div className="inline-block w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mb-3" />
-              <p className="text-sm text-gray-500">Generating your artifact…</p>
+              <p className="text-sm text-gray-500">Analysing your request…</p>
             </div>
           )}
 
-          {result && (
+          {/* ── Clarification / Intent Gate ─────────────────────────────────── */}
+          {clarification && !loading && (
+            <div className="card p-5 border-amber-200 bg-amber-50">
+              <div className="flex items-start gap-3 mb-4">
+                <span className="text-amber-500 text-lg leading-none mt-0.5">⚠</span>
+                <div>
+                  <p className="text-sm font-semibold text-amber-800 mb-1">
+                    คำขอนี้ยังไม่ระบุ artifact ที่ชัดเจน
+                  </p>
+                  <p className="text-xs text-amber-700">
+                    {clarification.message || 'โปรดเลือกประเภท artifact ที่ต้องการสร้าง หรือคลิกเพื่อสร้างทันที'}
+                  </p>
+                </div>
+              </div>
+
+              <p className="text-xs font-medium text-gray-600 mb-3">แนะนำ artifacts ที่เหมาะสม:</p>
+              <div className="space-y-2">
+                {clarification.options.map((opt, i) => (
+                  <button
+                    key={i}
+                    onClick={() => handleOptionSelect(opt)}
+                    className="w-full text-left p-3 rounded-lg border border-gray-200 bg-white hover:border-blue-400 hover:bg-blue-50 transition-colors group"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <span className="text-sm font-medium text-gray-900 group-hover:text-blue-700">
+                          {opt.label}
+                        </span>
+                        <p className="text-xs text-gray-500 mt-0.5 truncate">{opt.prompt}</p>
+                      </div>
+                      <span className="flex-shrink-0 text-xs font-medium text-blue-600 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded">
+                        {MODES.find(m => m.value === opt.mode)?.label ?? opt.mode}
+                      </span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+
+              <div className="mt-4 pt-4 border-t border-amber-100">
+                <p className="text-xs text-amber-600">
+                  หากต้องการ brainstorm ก่อน ให้ไปที่{' '}
+                  <a href="/dashboard/ideas" className="underline font-medium">Idea Lab</a>
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* ── Artifact result ──────────────────────────────────────────────── */}
+          {artifact && !loading && (
             <div className="card p-5">
               <div className="flex items-center justify-between mb-3">
-                <h3 className="font-semibold text-gray-900">{result.title}</h3>
-                <CopyButton text={result.content} />
+                <h3 className="font-semibold text-gray-900">{artifact.title}</h3>
+                <CopyButton text={artifact.content} />
               </div>
               <pre className="bg-gray-950 text-gray-100 rounded-lg p-4 text-sm overflow-auto max-h-[32rem] whitespace-pre-wrap font-mono">
-                {result.content}
+                {artifact.content}
               </pre>
             </div>
           )}
@@ -164,8 +249,32 @@ export function BuilderClient({ workspaceId }: { workspaceId: string }) {
               </ul>
             )}
           </div>
+
+          {/* Intent guide */}
+          <div className="card p-4">
+            <h3 className="text-sm font-semibold text-gray-700 mb-3">Mode Guide</h3>
+            <div className="space-y-1.5 text-xs text-gray-500">
+              {[
+                { input: 'ออกแบบ flow รับ lead', mode: 'Spec' },
+                { input: 'เขียน schema เก็บ lead', mode: 'SQL' },
+                { input: 'ออกแบบ API รับ booking', mode: 'API' },
+                { input: 'ออกแบบหน้า landing page', mode: 'UI' },
+                { input: 'เขียน Next.js page', mode: 'Code' },
+              ].map((row) => (
+                <div key={row.input} className="flex items-center justify-between gap-2">
+                  <span className="truncate">{row.input}</span>
+                  <span className="flex-shrink-0 font-medium text-blue-600">{row.mode}</span>
+                </div>
+              ))}
+              <div className="pt-2 border-t border-gray-100">
+                <span className="text-amber-600">ช่วยเพิ่มยอดขาย →</span>
+                <span className="text-gray-400"> Idea Lab</span>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
   )
 }
+
