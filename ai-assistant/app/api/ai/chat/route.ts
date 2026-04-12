@@ -177,8 +177,9 @@ export async function POST(request: Request) {
             .insert({
               session_id: activeSessionId,
               module: 'chat',
-              prompt_key: 'chat',
-              prompt_version: 1,
+              prompt_key: 'chat_module_prompt',
+              prompt_version: modulePromptData.version,
+              prompt_source: modulePromptData.source,
               provider: process.env.AI_PROVIDER ?? 'anthropic',
               model: process.env.ANTHROPIC_MODEL ?? process.env.OPENAI_MODEL ?? 'claude-sonnet-4-6',
               status: 'success',

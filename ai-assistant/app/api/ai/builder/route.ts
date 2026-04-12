@@ -89,8 +89,9 @@ export async function POST(request: Request) {
       .insert({
         session_id: session.id,
         module: 'builder',
-        prompt_key: `builder_${mode}`,
-        prompt_version: 1,
+        prompt_key: 'builder_module_prompt',
+        prompt_version: modulePromptData.version,
+        prompt_source: modulePromptData.source,
         provider: result.provider,
         model: result.model,
         status: 'success',

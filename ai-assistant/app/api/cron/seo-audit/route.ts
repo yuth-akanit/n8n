@@ -11,6 +11,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { fetchAndExtractPage } from '@/lib/seo/scraper'
 import { runSeoRules, computeSeoScore } from '@/lib/seo/rules'
 import { runSeoSummaryPrompt } from '@/lib/ai'
+import { getModulePrompt } from '@/lib/ai/module-prompts'
 import { sendLineNotify } from '@/lib/notify/line'
 
 export const dynamic = 'force-dynamic'
@@ -67,7 +68,8 @@ export async function POST(request: Request) {
 
         if (!audit) continue
 
-        const aiResult = await runSeoSummaryPrompt(pageData as unknown as Record<string, unknown>, issues)
+        const seoModulePrompt = await getModulePrompt(supabase, site.workspace_id, 'seo_module_prompt')
+        const aiResult = await runSeoSummaryPrompt(pageData as unknown as Record<string, unknown>, issues, undefined, seoModulePrompt.text)
 
         await supabase.from('seo_audits').update({
           status: 'completed',
