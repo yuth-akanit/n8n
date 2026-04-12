@@ -92,7 +92,7 @@ async function callAnthropic(prompt: string, systemPrompt: string, images?: stri
     },
     body: JSON.stringify({
       model,
-      max_tokens: 4096,
+      max_tokens: 8192,
       system: systemPrompt,
       messages: [{ role: 'user', content: userContent }],
     }),
@@ -154,7 +154,7 @@ async function callOpenAI(prompt: string, systemPrompt: string, images?: string[
     },
     body: JSON.stringify({
       model,
-      max_tokens: 4096,
+      max_tokens: 8192,
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userContent },
@@ -241,7 +241,7 @@ async function* streamAnthropic(
       'x-api-key': process.env.ANTHROPIC_API_KEY!,
       'anthropic-version': '2023-06-01',
     },
-    body: JSON.stringify({ model, max_tokens: 4096, stream: true, system: systemPrompt, messages: apiMessages }),
+    body: JSON.stringify({ model, max_tokens: 8192, stream: true, system: systemPrompt, messages: apiMessages }),
   })
 
   if (!response.ok) {
@@ -296,7 +296,7 @@ async function* streamOpenAI(
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.OPENAI_API_KEY}` },
-    body: JSON.stringify({ model, max_tokens: 4096, stream: true, messages: apiMessages }),
+    body: JSON.stringify({ model, max_tokens: 8192, stream: true, messages: apiMessages }),
   })
 
   if (!response.ok) {

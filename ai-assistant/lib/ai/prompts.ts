@@ -45,16 +45,17 @@ export const USER_PROMPTS = {
 Brief: ${prompt}
 ${constraints ? `Constraints: ${constraints}` : ''}
 
-Generate 10 specific, practical ideas for this service business team.
+Generate 5 specific, practical ideas for this service business team.
+Keep each field concise (1 sentence max for brief/problem/solution).
 Return JSON with this exact structure:
 {
   "ideas": [
     {
-      "title": "string",
-      "brief": "string (1-2 sentences)",
-      "audience": "string",
-      "problem": "string",
-      "solution": "string",
+      "title": "string (short)",
+      "brief": "string (1 sentence)",
+      "audience": "string (short)",
+      "problem": "string (1 sentence)",
+      "solution": "string (1 sentence)",
       "channel": ["array", "of", "channels"],
       "score_impact": number (1-10),
       "score_ease": number (1-10),
