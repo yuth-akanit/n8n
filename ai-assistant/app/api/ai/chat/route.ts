@@ -119,8 +119,10 @@ export async function POST(request: Request) {
     const pineconeContext = await queryPineconeAssistant(prompt)
     if (pineconeContext) finalContext += `\n\n${pineconeContext}`
 
-    // Optionally enrich with Tavily web search
-    if (process.env.TAVILY_API_KEY) {
+    // Tavily web search — only when no internal document context found
+    // (prevents generic web prices from overriding company-specific document data)
+    const hasInternalContext = !!(ragContext || pineconeContext)
+    if (!hasInternalContext && process.env.TAVILY_API_KEY) {
       try {
         const { tavily } = await import('@tavily/core')
         const tvly = tavily({ apiKey: process.env.TAVILY_API_KEY })
