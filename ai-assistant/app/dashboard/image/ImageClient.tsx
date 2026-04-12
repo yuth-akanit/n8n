@@ -57,16 +57,19 @@ export function ImageClient() {
   const [error, setError]         = useState('')
   const [result, setResult]       = useState<GeneratedImage | null>(null)
   const [selected, setSelected]   = useState(0)
-  const [history, setHistory]     = useState<HistoryItem[]>([])
+  const [history, setHistory]           = useState<HistoryItem[]>([])
   const [historyLoading, setHistoryLoading] = useState(true)
+  const [historyError, setHistoryError] = useState('')
 
   const loadHistory = useCallback(async () => {
+    setHistoryError('')
     try {
       const res = await fetch('/api/artifacts?type=image&limit=40')
+      if (!res.ok) throw new Error(`Server error ${res.status}`)
       const data = await res.json() as HistoryItem[]
       setHistory(Array.isArray(data) ? data : [])
-    } catch {
-      // history is best-effort
+    } catch (err) {
+      setHistoryError(err instanceof Error ? err.message : 'โหลดประวัติไม่ได้')
     } finally {
       setHistoryLoading(false)
     }
@@ -331,6 +334,11 @@ export function ImageClient() {
           <div className="flex items-center gap-2 text-xs text-gray-400 py-4">
             <span className="w-4 h-4 border-2 border-gray-300 border-t-transparent rounded-full animate-spin" />
             กำลังโหลด…
+          </div>
+        ) : historyError ? (
+          <div className="flex items-center gap-4 py-4">
+            <p className="text-xs text-red-500">{historyError}</p>
+            <button onClick={() => { setHistoryLoading(true); void loadHistory() }} className="text-xs text-blue-600 hover:underline">ลองใหม่</button>
           </div>
         ) : history.length === 0 ? (
           <p className="text-xs text-gray-400 py-4">ยังไม่มีประวัติ — สร้างรูปแรกได้เลย</p>

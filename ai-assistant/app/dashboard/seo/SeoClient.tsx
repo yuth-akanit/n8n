@@ -23,18 +23,21 @@ export function SeoClient({ workspaceId }: { workspaceId: string }) {
   const [error, setError] = useState('')
   const [audits, setAudits] = useState<SeoAuditRow[]>([])
   const [loadingAudits, setLoadingAudits] = useState(true)
+  const [auditsError, setAuditsError] = useState('')
 
   useEffect(() => {
     loadAudits()
   }, [])
 
   async function loadAudits() {
+    setAuditsError('')
     try {
       const res = await fetch('/api/seo/audits')
+      if (!res.ok) throw new Error(`Server error ${res.status}`)
       const data = await res.json()
       setAudits(Array.isArray(data) ? data : [])
-    } catch {
-      // ignore
+    } catch (err) {
+      setAuditsError(err instanceof Error ? err.message : 'โหลดรายการ audit ไม่ได้')
     } finally {
       setLoadingAudits(false)
     }
@@ -120,6 +123,11 @@ export function SeoClient({ workspaceId }: { workspaceId: string }) {
       {loadingAudits ? (
         <div className="card p-8 text-center">
           <div className="inline-block w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+        </div>
+      ) : auditsError ? (
+        <div className="card p-4 flex items-center justify-between gap-4">
+          <p className="text-sm text-red-600">{auditsError}</p>
+          <button onClick={loadAudits} className="text-xs text-blue-600 hover:underline flex-shrink-0">ลองใหม่</button>
         </div>
       ) : audits.length === 0 ? (
         <EmptyState title="No audits yet" description="Enter a URL above to run your first SEO audit." />

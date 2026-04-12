@@ -53,12 +53,14 @@ export function BuilderClient({ workspaceId }: { workspaceId: string }) {
   const [artifact, setArtifact] = useState<ArtifactResult | null>(null)
   const [clarification, setClarification] = useState<ClarificationResult | null>(null)
   const [recentArtifacts, setRecentArtifacts] = useState<ArtifactPreview[]>([])
+  const [artifactsError, setArtifactsError] = useState('')
 
   useEffect(() => {
+    setArtifactsError('')
     fetch('/api/artifacts?limit=5')
-      .then(r => r.json())
+      .then(r => { if (!r.ok) throw new Error(`${r.status}`); return r.json() })
       .then(data => setRecentArtifacts(Array.isArray(data) ? data : []))
-      .catch(() => {})
+      .catch((err: unknown) => setArtifactsError(err instanceof Error ? err.message : 'โหลดไม่ได้'))
   }, [artifact])
 
   const callBuilder = useCallback(async (targetMode: BuilderMode, targetPrompt: string) => {
@@ -231,7 +233,9 @@ export function BuilderClient({ workspaceId }: { workspaceId: string }) {
         <div className="space-y-4">
           <div className="card p-4">
             <h3 className="text-sm font-semibold text-gray-700 mb-3">Recent Artifacts</h3>
-            {recentArtifacts.length === 0 ? (
+            {artifactsError ? (
+              <p className="text-xs text-red-500">{artifactsError}</p>
+            ) : recentArtifacts.length === 0 ? (
               <EmptyState title="No artifacts yet" />
             ) : (
               <ul className="space-y-2">
@@ -248,6 +252,7 @@ export function BuilderClient({ workspaceId }: { workspaceId: string }) {
                 ))}
               </ul>
             )}
+
           </div>
 
           {/* Intent guide */}
