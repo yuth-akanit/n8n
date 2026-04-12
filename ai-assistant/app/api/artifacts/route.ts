@@ -16,14 +16,17 @@ export async function GET(request: Request) {
   const type = searchParams.get('type') // optional artifact_type filter
 
   const supabase = createServiceClient()
+  // Images are independent artifacts (not versioned sequences) — show all of them
+  const skipLatestFilter = type === 'image'
+
   let query = supabase
     .from('artifacts')
     .select('id, title, artifact_type, format, content, created_at, project_id')
     .eq('workspace_id', ctx.workspaceId)
-    .eq('is_latest', true)
     .order('created_at', { ascending: false })
     .limit(limit)
 
+  if (!skipLatestFilter) query = query.eq('is_latest', true)
   if (type) query = query.eq('artifact_type', type)
 
   const { data, error } = await query

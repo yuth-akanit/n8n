@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { requireApiAuth } from '@/lib/auth/server'
-import { resolveNextArtifactVersion } from '@/lib/artifacts'
 
 type ImageStyle =
   | 'realistic' | 'illustration' | 'anime' | 'logo' | 'product' | 'ui_mockup'
@@ -102,8 +101,8 @@ export async function POST(request: Request) {
     const { workspaceId, user } = ctx
 
     const artifactIds: string[] = []
+    // Each image is an independent artifact — no versioning, no is_latest flipping
     for (const url of imageUrls) {
-      const version = await resolveNextArtifactVersion(supabase, { workspaceId, artifactType: 'image' })
       const { data: artifact, error: artifactErr } = await supabase
         .from('artifacts')
         .insert({
@@ -112,7 +111,7 @@ export async function POST(request: Request) {
           title: rawPrompt.slice(0, 80),
           content: url,
           format: 'url',
-          version,
+          version: 1,
           is_latest: true,
           created_by: user.id,
         })
