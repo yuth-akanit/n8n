@@ -6,26 +6,44 @@ import { getAuthContext } from '@/lib/auth/server'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { Badge } from '@/components/ui/Badge'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { SearchInput } from '@/components/ui/SearchInput'
 import { timeAgo } from '@/lib/utils'
 import type { Idea } from '@/types'
 
-export default async function IdeasPage() {
+interface Props {
+  searchParams: { q?: string }
+}
+
+export default async function IdeasPage({ searchParams }: Props) {
   const ctx = await getAuthContext()
   if (!ctx) redirect('/login')
 
+  const q = searchParams.q?.trim() ?? ''
+
   const supabase = createServiceClient()
-  const { data: ideas, error } = await supabase
+  let query = supabase
     .from('ideas')
     .select('*')
     .eq('workspace_id', ctx.workspaceId)
     .order('created_at', { ascending: false })
+
+  if (q) {
+    query = query.or(`title.ilike.%${q}%,brief.ilike.%${q}%`)
+  }
+
+  const { data: ideas, error } = await query
 
   return (
     <div>
       <PageHeader
         title="Idea Lab"
         description="Brainstorm and evaluate ideas with AI"
-        action={<Link href="/dashboard/ideas/new" className="btn-primary">+ New Idea</Link>}
+        action={
+          <div className="flex items-center gap-2">
+            <SearchInput placeholder="Search ideas…" />
+            <Link href="/dashboard/ideas/new" className="btn-primary">+ New Idea</Link>
+          </div>
+        }
       />
 
       {error && (
@@ -34,17 +52,34 @@ export default async function IdeasPage() {
         </div>
       )}
 
+      {q && (
+        <p className="text-sm text-gray-500 mb-4">
+          {ideas?.length ?? 0} result{ideas?.length !== 1 ? 's' : ''} for &ldquo;{q}&rdquo;
+        </p>
+      )}
+
       {!ideas || ideas.length === 0 ? (
         <EmptyState
-          title="No ideas yet"
-          description="Start by entering a brief and let AI generate practical ideas for your team."
-          action={<Link href="/dashboard/ideas/new" className="btn-primary">Generate Ideas</Link>}
+          title={q ? 'No ideas match your search' : 'No ideas yet'}
+          description={
+            q
+              ? 'Try a different keyword or clear the search.'
+              : 'Start by entering a brief and let AI generate practical ideas for your team.'
+          }
+          action={
+            q ? undefined : (
+              <Link href="/dashboard/ideas/new" className="btn-primary">Generate Ideas</Link>
+            )
+          }
         />
       ) : (
         <div className="space-y-3">
           {(ideas as Idea[]).map((idea) => (
-            <Link key={idea.id} href={`/dashboard/ideas/${idea.id}`}
-              className="card p-4 flex items-start justify-between hover:shadow-md transition-shadow block">
+            <Link
+              key={idea.id}
+              href={`/dashboard/ideas/${idea.id}`}
+              className="card p-4 flex items-start justify-between hover:shadow-md transition-shadow block"
+            >
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1">
                   <h2 className="text-sm font-semibold text-gray-900 truncate">{idea.title}</h2>

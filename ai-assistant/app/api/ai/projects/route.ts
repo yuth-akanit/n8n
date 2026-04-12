@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { requireApiAuth } from '@/lib/auth/server'
 import { runProjectPlannerPrompt } from '@/lib/ai'
+import { requireString, requireUuid, optionalString } from '@/lib/api/validate'
+import { handleRouteError } from '@/lib/api/errors'
+import { resolveNextArtifactVersion } from '@/lib/artifacts'
 
 export async function POST(request: Request) {
   let ctx
@@ -12,12 +15,11 @@ export async function POST(request: Request) {
   }
 
   try {
-    const body = await request.json() as { projectId: string; goal: string; scope?: string }
-    const { projectId, goal, scope } = body
+    const body = await request.json() as { projectId?: unknown; goal?: unknown; scope?: unknown }
 
-    if (!projectId || !goal) {
-      return NextResponse.json({ error: 'projectId and goal are required' }, { status: 400 })
-    }
+    const projectId = requireUuid(body.projectId, 'projectId')
+    const goal = requireString(body.goal, 'goal', { max: 2000 })
+    const scope = optionalString(body.scope, 'scope', { max: 1000 })
 
     const supabase = createServiceClient()
     const { workspaceId, user } = ctx
@@ -84,6 +86,12 @@ export async function POST(request: Request) {
       metadata: { latency_ms: latency },
     })
 
+    const version = await resolveNextArtifactVersion(supabase, {
+      workspaceId,
+      projectId,
+      artifactType: 'project_plan',
+    })
+
     const { data: artifact } = await supabase
       .from('artifacts')
       .insert({
@@ -94,6 +102,8 @@ export async function POST(request: Request) {
         title: `Project Plan: ${goal.slice(0, 60)}`,
         content: JSON.stringify({ goal, scope, milestones: result.milestones, docs: result.docs }, null, 2),
         format: 'json',
+        version,
+        is_latest: true,
         created_by: user.id,
       })
       .select()
@@ -117,11 +127,7 @@ export async function POST(request: Request) {
       milestones: result.milestones,
       docs: result.docs,
     })
-  } catch (err: unknown) {
-    console.error('[api/ai/projects]', err)
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Internal server error' },
-      { status: 500 }
-    )
+  } catch (err) {
+    return handleRouteError(err, 'api/ai/projects')
   }
 }

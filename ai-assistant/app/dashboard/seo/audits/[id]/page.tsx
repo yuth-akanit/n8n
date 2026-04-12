@@ -6,6 +6,7 @@ import { getAuthContext } from '@/lib/auth/server'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { Badge } from '@/components/ui/Badge'
 import { formatDate } from '@/lib/utils'
+import { BulkPatchActions } from '@/components/seo/BulkPatchActions'
 import type { SeoAudit, SeoAuditPage, SeoIssue, SeoPatch } from '@/types'
 import { GeneratePatchesButton } from './GeneratePatchesButton'
 
@@ -140,12 +141,20 @@ export default async function SeoAuditDetailPage({ params }: Props) {
           )}
         </div>
 
-        {/* Patches sidebar */}
+        {/* Patches sidebar — now with bulk actions */}
         <div className="space-y-4">
           <div className="card p-4">
-            <h3 className="text-sm font-semibold text-gray-700 mb-3">
-              Proposed Patches ({patchList.length})
-            </h3>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-gray-700">
+                Patches ({patchList.length})
+              </h3>
+              {patchList.filter(p => p.status === 'proposed').length > 0 && (
+                <span className="text-xs text-gray-400">
+                  {patchList.filter(p => p.status === 'proposed').length} proposed
+                </span>
+              )}
+            </div>
+
             {patchList.length === 0 ? (
               <p className="text-xs text-gray-400">
                 {issueList.length > 0
@@ -153,23 +162,7 @@ export default async function SeoAuditDetailPage({ params }: Props) {
                   : 'No issues detected — no patches needed.'}
               </p>
             ) : (
-              <ul className="space-y-2">
-                {patchList.map((patch) => (
-                  <li key={patch.id}>
-                    <Link
-                      href={`/dashboard/seo/patches/${patch.id}`}
-                      className="block p-2 rounded hover:bg-gray-50"
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-medium text-gray-700">
-                          {patch.patch_type.replace(/_/g, ' ')}
-                        </span>
-                        <Badge label={patch.status} status={patch.status} />
-                      </div>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
+              <BulkPatchActions patches={patchList} />
             )}
           </div>
 

@@ -12,6 +12,11 @@ export interface AiCallResult {
   latency_ms: number
 }
 
+export interface ChatMessage {
+  role: 'user' | 'assistant'
+  content: string
+}
+
 function getProvider(): AiProvider {
   const selected = process.env.AI_PROVIDER
   if (selected === 'mock') return 'mock'
@@ -201,52 +206,231 @@ async function callGemini(prompt: string, systemPrompt: string, images?: string[
   return { content, provider: 'gemini', model, latency_ms: Date.now() - start }
 }
 
+// ============================================================
+// Streaming chat — yields text chunks, supports message history
+// ============================================================
+
+async function* streamAnthropic(
+  messages: ChatMessage[],
+  systemPrompt: string,
+  images?: string[]
+): AsyncGenerator<string> {
+  const model = process.env.ANTHROPIC_MODEL ?? 'claude-sonnet-4-6'
+
+  // Attach images to the last user message
+  const last = messages[messages.length - 1]
+  const lastContent: unknown[] = [{ type: 'text', text: last.content }]
+  if (images && images.length > 0) {
+    for (const img of images) {
+      const match = img.match(/^data:(image\/[^;]+);base64,(.+)$/)
+      if (match) {
+        lastContent.push({ type: 'image', source: { type: 'base64', media_type: match[1], data: match[2] } })
+      }
+    }
+  }
+
+  const apiMessages = [
+    ...messages.slice(0, -1).map((m) => ({ role: m.role, content: m.content })),
+    { role: 'user', content: lastContent },
+  ]
+
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': process.env.ANTHROPIC_API_KEY!,
+      'anthropic-version': '2023-06-01',
+    },
+    body: JSON.stringify({ model, max_tokens: 4096, stream: true, system: systemPrompt, messages: apiMessages }),
+  })
+
+  if (!response.ok) {
+    const err = await response.text()
+    throw new Error(`Anthropic API error ${response.status}: ${err}`)
+  }
+
+  const reader = response.body!.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+    const lines = buffer.split('\n')
+    buffer = lines.pop() ?? ''
+    for (const line of lines) {
+      if (!line.startsWith('data: ')) continue
+      const raw = line.slice(6).trim()
+      try {
+        const ev = JSON.parse(raw) as { type: string; delta?: { type: string; text?: string } }
+        if (ev.type === 'content_block_delta' && ev.delta?.type === 'text_delta' && ev.delta.text) {
+          yield ev.delta.text
+        }
+      } catch { /* skip malformed */ }
+    }
+  }
+}
+
+async function* streamOpenAI(
+  messages: ChatMessage[],
+  systemPrompt: string,
+  images?: string[]
+): AsyncGenerator<string> {
+  const model = process.env.OPENAI_MODEL ?? 'gpt-4o'
+
+  const last = messages[messages.length - 1]
+  const lastContent: unknown[] = [{ type: 'text', text: last.content }]
+  if (images && images.length > 0) {
+    for (const img of images) {
+      lastContent.push({ type: 'image_url', image_url: { url: img } })
+    }
+  }
+
+  const apiMessages = [
+    { role: 'system', content: systemPrompt },
+    ...messages.slice(0, -1).map((m) => ({ role: m.role, content: m.content })),
+    { role: 'user', content: lastContent },
+  ]
+
+  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.OPENAI_API_KEY}` },
+    body: JSON.stringify({ model, max_tokens: 4096, stream: true, messages: apiMessages }),
+  })
+
+  if (!response.ok) {
+    const err = await response.text()
+    throw new Error(`OpenAI API error ${response.status}: ${err}`)
+  }
+
+  const reader = response.body!.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+    const lines = buffer.split('\n')
+    buffer = lines.pop() ?? ''
+    for (const line of lines) {
+      if (!line.startsWith('data: ')) continue
+      const raw = line.slice(6).trim()
+      if (raw === '[DONE]') return
+      try {
+        const ev = JSON.parse(raw) as { choices?: Array<{ delta?: { content?: string } }> }
+        const text = ev.choices?.[0]?.delta?.content
+        if (text) yield text
+      } catch { /* skip */ }
+    }
+  }
+}
+
+async function* streamFallback(fullText: string): AsyncGenerator<string> {
+  // Non-streaming providers: emit the whole response as one chunk
+  yield fullText
+}
+
+/** Stream a multi-turn chat response, yielding text chunks as they arrive */
+export async function* streamAiChat(
+  messages: ChatMessage[],
+  systemPrompt: string,
+  images?: string[]
+): AsyncGenerator<string> {
+  const primary = getProvider()
+  const hasImages = images && images.length > 0
+  const visionOnly = ['openai', 'anthropic', 'gemini']
+
+  // Build ordered fallback chain
+  const all = availableProviders()
+  const chain: AiProvider[] = [primary, ...all.filter((p) => p !== primary)]
+
+  let lastErr: unknown
+  for (const provider of chain) {
+    if (hasImages && !visionOnly.includes(provider) && provider !== 'mock') continue
+    try {
+      if (provider === 'anthropic') { yield* streamAnthropic(messages, systemPrompt, images); return }
+      if (provider === 'openai') { yield* streamOpenAI(messages, systemPrompt, images); return }
+      // Non-streaming providers — emit full response as one chunk
+      const lastMsg = messages[messages.length - 1]
+      const result = await callProvider(provider, 'chat', lastMsg.content, systemPrompt, images)
+      yield* streamFallback(result.content)
+      return
+    } catch (err) {
+      lastErr = err
+      if (provider !== 'mock') {
+        console.warn(`[AI stream] "${provider}" failed:`, err instanceof Error ? err.message : err)
+      }
+    }
+  }
+  throw lastErr ?? new Error('All AI providers failed')
+}
+
+/** Call a specific provider and return the result */
+async function callProvider(
+  provider: AiProvider,
+  promptKey: string,
+  userPrompt: string,
+  systemPrompt: string,
+  images?: string[]
+): Promise<AiCallResult> {
+  if (provider === 'anthropic') return callAnthropic(userPrompt, systemPrompt, images)
+  if (provider === 'openai') return callOpenAI(userPrompt, systemPrompt, images)
+  if (provider === 'gemini') return callGemini(userPrompt, systemPrompt, images)
+  if (provider === 'together') {
+    return callOpenAiCompatible(userPrompt, systemPrompt, process.env.TOGETHER_API_KEY!, 'https://api.together.xyz/v1', process.env.TOGETHER_MODEL || 'meta-llama/Llama-2-70b-chat-hf', 'together')
+  }
+  if (provider === 'kie') {
+    return callOpenAiCompatible(userPrompt, systemPrompt, process.env.KIE_API_KEY!, process.env.KIE_BASE_URL || 'https://api.kie.ai/v1', process.env.KIE_MODEL || 'llama-3', 'kie')
+  }
+  return callMock(promptKey)
+}
+
+/** Ordered list of providers that are currently configured */
+function availableProviders(): AiProvider[] {
+  const list: AiProvider[] = []
+  if (process.env.ANTHROPIC_API_KEY) list.push('anthropic')
+  if (process.env.OPENAI_API_KEY) list.push('openai')
+  if (process.env.GEMINI_API_KEY) list.push('gemini')
+  if (process.env.TOGETHER_API_KEY) list.push('together')
+  if (process.env.KIE_API_KEY) list.push('kie')
+  list.push('mock')
+  return list
+}
+
 export async function runAiPrompt(
   promptKey: string,
   userPrompt: string,
   systemPrompt: string,
-  images?: string[] // Base64 image strings
+  images?: string[]
 ): Promise<AiCallResult> {
-  let provider = getProvider()
-  
-  // If images are present, force a vision-capable provider
+  const primary = getProvider()
   const hasImages = images && images.length > 0
-  const visionProviders = ['openai', 'anthropic', 'gemini']
-  
-  if (hasImages && !visionProviders.includes(provider)) {
-    console.log(`[AI] Provider "${provider}" does not support vision. Switching...`)
-    // Pick the first available vision provider
-    if (process.env.OPENAI_API_KEY) provider = 'openai'
-    else if (process.env.ANTHROPIC_API_KEY) provider = 'anthropic'
-    else if (process.env.GEMINI_API_KEY) provider = 'gemini'
-    else console.warn('[AI] No vision-capable provider available! Images will be ignored.')
-    console.log(`[AI] Switched to "${provider}" for vision`)
-  }
-  
-  if (provider === 'openai') return callOpenAI(userPrompt, systemPrompt, images)
-  if (provider === 'gemini') return callGemini(userPrompt, systemPrompt, images)
-  if (provider === 'anthropic') return callAnthropic(userPrompt, systemPrompt, images)
+  const visionOnly = ['openai', 'anthropic', 'gemini']
 
-  if (provider === 'together') {
-    return callOpenAiCompatible(
-      userPrompt, systemPrompt, 
-      process.env.TOGETHER_API_KEY!, 
-      'https://api.together.xyz/v1', 
-      process.env.TOGETHER_MODEL || 'meta-llama/Llama-2-70b-chat-hf', 
-      'together'
-    )
+  // Build fallback chain: primary first, then all others in order
+  const all = availableProviders()
+  const chain: AiProvider[] = [primary, ...all.filter((p) => p !== primary)]
+
+  let lastErr: unknown
+  for (const provider of chain) {
+    // Skip non-vision providers when images are attached
+    if (hasImages && !visionOnly.includes(provider) && provider !== 'mock') continue
+    try {
+      const result = await callProvider(provider, promptKey, userPrompt, systemPrompt, images)
+      if (provider !== primary) {
+        console.log(`[AI] Fallback succeeded: "${provider}" (primary "${primary}" failed)`)
+      }
+      return result
+    } catch (err) {
+      lastErr = err
+      if (provider !== 'mock') {
+        console.warn(`[AI] "${provider}" failed:`, err instanceof Error ? err.message : err)
+      }
+    }
   }
-  
-  if (provider === 'kie') {
-    return callOpenAiCompatible(
-      userPrompt, systemPrompt, 
-      process.env.KIE_API_KEY!, 
-      process.env.KIE_BASE_URL || 'https://api.kie.ai/v1', 
-      process.env.KIE_MODEL || 'llama-3', 
-      'kie'
-    )
-  }
-  return callMock(promptKey)
+  throw lastErr ?? new Error('All AI providers failed')
 }
 
 // ============================================================

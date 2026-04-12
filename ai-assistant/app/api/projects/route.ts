@@ -3,7 +3,12 @@ import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { requireApiAuth } from '@/lib/auth/server'
 import { slugify } from '@/lib/utils'
+import { requireString, requireOneOf, optionalString } from '@/lib/api/validate'
+import { handleRouteError } from '@/lib/api/errors'
 import type { ProjectType, Priority } from '@/types'
+
+const PROJECT_TYPES = ['idea', 'app', 'automation', 'seo', 'content', 'internal_tool'] as const
+const PRIORITIES = ['low', 'medium', 'high', 'critical'] as const
 
 export async function GET() {
   let ctx
@@ -34,17 +39,20 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json() as {
-      name: string
-      project_type: ProjectType
-      goal?: string
-      summary?: string
-      priority?: Priority
+      name?: unknown
+      project_type?: unknown
+      goal?: unknown
+      summary?: unknown
+      priority?: unknown
     }
-    const { name, project_type, goal, summary, priority } = body
 
-    if (!name || !project_type) {
-      return NextResponse.json({ error: 'name and project_type are required' }, { status: 400 })
-    }
+    const name = requireString(body.name, 'name', { max: 200 })
+    const project_type = requireOneOf<ProjectType>(body.project_type, 'project_type', PROJECT_TYPES)
+    const goal = optionalString(body.goal, 'goal', { max: 2000 })
+    const summary = optionalString(body.summary, 'summary', { max: 500 })
+    const priority = body.priority
+      ? requireOneOf<Priority>(body.priority, 'priority', PRIORITIES)
+      : 'medium'
 
     const supabase = createServiceClient()
     const { workspaceId, user } = ctx
@@ -74,7 +82,7 @@ export async function POST(request: Request) {
         project_type,
         goal,
         summary,
-        priority: priority ?? 'medium',
+        priority,
         status: 'draft',
         created_by: user.id,
       })
@@ -84,8 +92,7 @@ export async function POST(request: Request) {
     if (error) throw error
 
     return NextResponse.json(data, { status: 201 })
-  } catch (err: unknown) {
-    console.error('[api/projects POST]', err)
-    return NextResponse.json({ error: err instanceof Error ? err.message : 'Internal error' }, { status: 500 })
+  } catch (err) {
+    return handleRouteError(err, 'api/projects POST')
   }
 }

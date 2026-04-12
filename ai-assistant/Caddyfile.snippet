@@ -1,0 +1,17 @@
+# Add this block to your Caddyfile on the VPS
+# (find it with: docker exec caddy cat /etc/caddy/Caddyfile)
+
+ai-workspace.paaair.online {
+    reverse_proxy localhost:3006 {
+        # Increase timeouts for AI streaming responses
+        transport http {
+            read_timeout  120s
+            write_timeout 120s
+        }
+        header_up X-Real-IP         {remote_host}
+        header_up X-Forwarded-For   {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+        # Disable buffering so SSE tokens reach the browser immediately
+        flush_interval -1
+    }
+}

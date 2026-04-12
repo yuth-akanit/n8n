@@ -111,7 +111,19 @@ async function resolveWorkspace(userId: string, email?: string): Promise<string>
     .single()
 
   if (wsErr || !workspace) {
-    // Slug collision — try with timestamp
+    // Insert failed — likely a concurrent request already created the workspace.
+    // Re-check membership before falling back to timestamp slug.
+    const { data: retryMembership } = await supabase
+      .from('workspace_members')
+      .select('workspace_id')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .single()
+
+    if (retryMembership?.workspace_id) return retryMembership.workspace_id
+
+    // Still no membership — genuine slug collision, try with timestamp suffix
     const { data: ws2 } = await supabase
       .from('workspaces')
       .insert({ name: `${displayName}'s Workspace`, slug: `${slug}-${Date.now()}` })

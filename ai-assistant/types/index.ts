@@ -11,7 +11,7 @@ export type DocType = 'brief' | 'spec' | 'prd' | 'architecture' | 'api_contract'
 export type MilestoneStatus = 'todo' | 'in_progress' | 'blocked' | 'done'
 export type TaskStatus = 'todo' | 'in_progress' | 'blocked' | 'review' | 'done'
 export type TaskType = 'research' | 'planning' | 'backend' | 'frontend' | 'seo' | 'content' | 'qa' | 'deploy'
-export type AiModule = 'idea' | 'project' | 'builder' | 'seo'
+export type AiModule = 'idea' | 'project' | 'builder' | 'seo' | 'chat'
 export type AiRunStatus = 'queued' | 'running' | 'success' | 'failed'
 export type MessageRole = 'system' | 'user' | 'assistant' | 'tool'
 export type ArtifactType = 'idea_doc' | 'project_plan' | 'markdown' | 'json' | 'sql' | 'code' | 'seo_report' | 'patch'
@@ -55,6 +55,7 @@ export interface Idea {
   score_ease: number | null
   score_roi: number | null
   status: IdeaStatus
+  tags: string[]
   created_by: string | null
   created_at: string
   updated_at: string
@@ -71,6 +72,7 @@ export interface Project {
   summary: string | null
   goal: string | null
   priority: Priority
+  tags: string[]
   created_by: string | null
   created_at: string
   updated_at: string

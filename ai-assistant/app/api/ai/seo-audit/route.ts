@@ -4,6 +4,12 @@ import { requireApiAuth } from '@/lib/auth/server'
 import { fetchAndExtractPage } from '@/lib/seo/scraper'
 import { runSeoRules, computeSeoScore } from '@/lib/seo/rules'
 import { runSeoSummaryPrompt } from '@/lib/ai'
+import { requireUrl, optionalString } from '@/lib/api/validate'
+import { handleRouteError } from '@/lib/api/errors'
+import { resolveNextArtifactVersion } from '@/lib/artifacts'
+import type { SeoAuditScope } from '@/types'
+
+const VALID_SCOPES = ['single_url', 'multi_url', 'site_scan'] as const
 
 export async function POST(request: Request) {
   let ctx
@@ -14,12 +20,14 @@ export async function POST(request: Request) {
   }
 
   try {
-    const body = await request.json() as { targetUrl: string; siteName?: string; scope?: string }
-    const { targetUrl, siteName, scope } = body
+    const body = await request.json() as { targetUrl?: unknown; siteName?: unknown; scope?: unknown }
 
-    if (!targetUrl) {
-      return NextResponse.json({ error: 'targetUrl is required' }, { status: 400 })
-    }
+    const targetUrl = requireUrl(body.targetUrl, 'targetUrl')
+    const siteName = optionalString(body.siteName, 'siteName', { max: 200 })
+    const rawScope = body.scope ?? 'single_url'
+    const scope: SeoAuditScope = VALID_SCOPES.includes(rawScope as SeoAuditScope)
+      ? (rawScope as SeoAuditScope)
+      : 'single_url'
 
     const supabase = createServiceClient()
     const { workspaceId, user } = ctx
@@ -52,7 +60,7 @@ export async function POST(request: Request) {
       .insert({
         site_id: siteId,
         status: 'running',
-        audit_scope: scope ?? 'single_url',
+        audit_scope: scope,
         target_url: targetUrl,
         created_by: user.id,
       })
@@ -115,11 +123,7 @@ export async function POST(request: Request) {
           const { tavily } = await import('@tavily/core')
           const tvly = tavily({ apiKey: process.env.TAVILY_API_KEY })
           const query = pageData.h1 ?? pageData.title ?? ''
-          // Fetches context from top related search results
-          competitorContext = await tvly.searchContext(query, {
-            searchDepth: 'basic',
-          })
-          
+          competitorContext = await tvly.searchContext(query, { searchDepth: 'basic' })
           if (typeof competitorContext !== 'string') {
             competitorContext = JSON.stringify(competitorContext)
           }
@@ -142,6 +146,11 @@ export async function POST(request: Request) {
       // optional — continue without
     }
 
+    const version = await resolveNextArtifactVersion(supabase, {
+      workspaceId,
+      artifactType: 'seo_report',
+    })
+
     const { data: artifact } = await supabase
       .from('artifacts')
       .insert({
@@ -150,6 +159,8 @@ export async function POST(request: Request) {
         title: `SEO Audit: ${targetUrl}`,
         content: JSON.stringify({ url: targetUrl, score, issues: ruleIssues, summary: aiSummary }, null, 2),
         format: 'json',
+        version,
+        is_latest: true,
         created_by: user.id,
       })
       .select()
@@ -173,11 +184,7 @@ export async function POST(request: Request) {
       score,
       summary: aiSummary,
     })
-  } catch (err: unknown) {
-    console.error('[api/ai/seo-audit]', err)
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Internal server error' },
-      { status: 500 }
-    )
+  } catch (err) {
+    return handleRouteError(err, 'api/ai/seo-audit')
   }
 }

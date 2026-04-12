@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { requireApiAuth } from '@/lib/auth/server'
 import { runSeoPatchPrompt } from '@/lib/ai'
+import { requireUuid, optionalUuid } from '@/lib/api/validate'
+import { handleRouteError } from '@/lib/api/errors'
 import type { SeoPatchType } from '@/types'
 
 export async function POST(request: Request) {
@@ -13,12 +15,10 @@ export async function POST(request: Request) {
   }
 
   try {
-    const body = await request.json() as { auditId: string; pageId?: string }
-    const { auditId, pageId } = body
+    const body = await request.json() as { auditId?: unknown; pageId?: unknown }
 
-    if (!auditId) {
-      return NextResponse.json({ error: 'auditId is required' }, { status: 400 })
-    }
+    const auditId = requireUuid(body.auditId, 'auditId')
+    const pageId = optionalUuid(body.pageId, 'pageId')
 
     const supabase = createServiceClient()
     const { workspaceId } = ctx
@@ -122,11 +122,7 @@ export async function POST(request: Request) {
     if (patchErr) throw patchErr
 
     return NextResponse.json({ patches: savedPatches })
-  } catch (err: unknown) {
-    console.error('[api/ai/seo-patch]', err)
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Internal server error' },
-      { status: 500 }
-    )
+  } catch (err) {
+    return handleRouteError(err, 'api/ai/seo-patch')
   }
 }

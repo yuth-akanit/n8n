@@ -96,6 +96,18 @@ export default async function IdeaDetailPage({ params }: Props) {
                   </dd>
                 </div>
               )}
+              {i.tags && i.tags.length > 0 && (
+                <div>
+                  <dt className="text-gray-500 mb-1">Tags</dt>
+                  <dd className="flex flex-wrap gap-1">
+                    {i.tags.map((t) => (
+                      <span key={t} className="text-xs px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 font-medium">
+                        #{t}
+                      </span>
+                    ))}
+                  </dd>
+                </div>
+              )}
             </dl>
           </div>
 

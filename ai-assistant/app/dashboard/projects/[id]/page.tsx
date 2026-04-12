@@ -6,6 +6,7 @@ import { getAuthContext } from '@/lib/auth/server'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { Badge } from '@/components/ui/Badge'
 import { formatDate } from '@/lib/utils'
+import { TaskManagerClient } from '@/components/projects/TaskManagerClient'
 import type { Project, Milestone, Task } from '@/types'
 
 interface Props {
@@ -33,13 +34,6 @@ export default async function ProjectPage({ params }: Props) {
   const ms = (milestones ?? []) as Milestone[]
   const ts = (tasks ?? []) as Task[]
 
-  const tasksByMilestone: Record<string, Task[]> = {}
-  for (const t of ts) {
-    const key = t.milestone_id ?? '__none__'
-    if (!tasksByMilestone[key]) tasksByMilestone[key] = []
-    tasksByMilestone[key].push(t)
-  }
-
   return (
     <div>
       <PageHeader
@@ -48,7 +42,7 @@ export default async function ProjectPage({ params }: Props) {
         action={
           <div className="flex gap-2">
             <Link href="/dashboard/projects" className="btn-secondary">← Projects</Link>
-            <Link href={`/dashboard/projects/${p.id}/plan`} className="btn-secondary">Plan</Link>
+            <Link href={`/dashboard/projects/${p.id}/plan`} className="btn-secondary">AI Plan</Link>
             <Link href={`/dashboard/projects/${p.id}/docs`} className="btn-secondary">Docs</Link>
           </div>
         }
@@ -64,28 +58,23 @@ export default async function ProjectPage({ params }: Props) {
             </div>
           )}
 
-          {/* Milestones & Tasks */}
-          {ms.length > 0 ? (
-            <div className="space-y-4">
-              {ms.map((m) => (
-                <div key={m.id} className="card p-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className="font-semibold text-gray-900">{m.title}</h3>
-                    <Badge label={m.status} status={m.status} />
-                  </div>
-                  {m.description && <p className="text-sm text-gray-500 mb-3">{m.description}</p>}
-                  <TaskList tasks={tasksByMilestone[m.id] ?? []} />
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="card p-8 text-center">
-              <p className="text-sm text-gray-500 mb-3">No milestones yet.</p>
-              <Link href={`/dashboard/projects/${p.id}/plan`} className="btn-primary">
-                Generate Plan with AI
-              </Link>
-            </div>
-          )}
+          {/* Milestones & Tasks — editable */}
+          <div>
+            <h3 className="text-sm font-semibold text-gray-700 mb-3">Milestones & Tasks</h3>
+            {ms.length === 0 && ts.length === 0 ? (
+              <div className="card p-6 text-center mb-4">
+                <p className="text-sm text-gray-500 mb-3">No milestones yet.</p>
+                <Link href={`/dashboard/projects/${p.id}/plan`} className="btn-primary">
+                  Generate Plan with AI
+                </Link>
+              </div>
+            ) : null}
+            <TaskManagerClient
+              projectId={p.id}
+              milestones={ms}
+              tasks={ts}
+            />
+          </div>
         </div>
 
         {/* Sidebar */}
@@ -128,27 +117,6 @@ export default async function ProjectPage({ params }: Props) {
         </div>
       </div>
     </div>
-  )
-}
-
-function TaskList({ tasks }: { tasks: Task[] }) {
-  if (tasks.length === 0) {
-    return <p className="text-xs text-gray-400">No tasks</p>
-  }
-  return (
-    <ul className="space-y-1">
-      {tasks.map((t) => (
-        <li key={t.id} className="flex items-center gap-2 text-sm">
-          <span className={`w-2 h-2 rounded-full flex-shrink-0 ${
-            t.status === 'done' ? 'bg-green-500' :
-            t.status === 'in_progress' ? 'bg-blue-500' :
-            t.status === 'blocked' ? 'bg-red-500' : 'bg-gray-300'
-          }`} />
-          <span className={`flex-1 ${t.status === 'done' ? 'line-through text-gray-400' : 'text-gray-700'}`}>{t.title}</span>
-          <Badge label={t.priority} status={t.priority} className="text-xs" />
-        </li>
-      ))}
-    </ul>
   )
 }
 

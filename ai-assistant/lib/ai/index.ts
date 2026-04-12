@@ -1,9 +1,19 @@
 /**
  * AI module entry point — public functions used by API routes.
  */
-import { runAiPrompt, type AiCallResult } from './provider'
+import { runAiPrompt, streamAiChat, type AiCallResult, type ChatMessage } from './provider'
 import { SYSTEM_PROMPTS, USER_PROMPTS } from './prompts'
 import type { BuilderMode, GeneratedIdea, GeneratedMilestone, GeneratedDoc } from '@/types'
+
+export type { ChatMessage }
+
+/** Strip markdown code fences that some models add around JSON output */
+function stripCodeFences(text: string): string {
+  return text
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/\s*```\s*$/, '')
+    .trim()
+}
 
 export interface IdeaRunResult extends AiCallResult {
   ideas: GeneratedIdea[]
@@ -21,7 +31,7 @@ export async function runIdeaPrompt(
 
   let ideas: GeneratedIdea[] = []
   try {
-    const parsed = JSON.parse(result.content) as { ideas: GeneratedIdea[] }
+    const parsed = JSON.parse(stripCodeFences(result.content)) as { ideas: GeneratedIdea[] }
     ideas = parsed.ideas ?? []
   } catch {
     // If AI didn't return valid JSON, wrap in a single idea
@@ -62,7 +72,7 @@ export async function runProjectPlannerPrompt(
   let docs: GeneratedDoc[] = []
 
   try {
-    const parsed = JSON.parse(result.content) as {
+    const parsed = JSON.parse(stripCodeFences(result.content)) as {
       summary?: string
       milestones?: GeneratedMilestone[]
       docs?: GeneratedDoc[]
@@ -140,7 +150,7 @@ export async function runSeoPatchPrompt(
 
   let patches: SeoPatchSuggestResult['patches'] = []
   try {
-    const parsed = JSON.parse(result.content) as { patches: typeof patches }
+    const parsed = JSON.parse(stripCodeFences(result.content)) as { patches: typeof patches }
     patches = parsed.patches ?? []
   } catch {
     patches = []
@@ -163,4 +173,41 @@ export async function runChatPrompt(
     images
   )
   return result
+}
+
+const TAG_CANDIDATES = [
+  'marketing', 'automation', 'ai', 'analytics', 'content', 'customer',
+  'review', 'social', 'email', 'seo', 'internal', 'data', 'mobile',
+  'web', 'reporting', 'ux', 'operations', 'sales', 'crm', 'workflow',
+]
+
+/**
+ * Auto-classify text into 3–5 tags.
+ * Runs fast — uses the smallest available model.
+ * Returns [] on any failure so callers can proceed without blocking.
+ */
+export async function runTagPrompt(text: string): Promise<string[]> {
+  try {
+    const result = await runAiPrompt(
+      'ideas',
+      `Choose 3-5 tags from this list: ${TAG_CANDIDATES.join(', ')}\n\nContent:\n${text.slice(0, 400)}\n\nReturn raw JSON only: {"tags":["tag1","tag2"]}`,
+      'You are a content classifier. Return raw JSON only, no explanation, no code fences.'
+    )
+    const parsed = JSON.parse(stripCodeFences(result.content)) as { tags?: string[] }
+    return (parsed.tags ?? []).filter((t) => TAG_CANDIDATES.includes(t)).slice(0, 5)
+  } catch {
+    return []
+  }
+}
+
+/** Stream a multi-turn chat, yielding text tokens as they arrive */
+export async function* streamChat(
+  messages: ChatMessage[],
+  context?: string,
+  images?: string[]
+): AsyncGenerator<string> {
+  const systemPrompt = context
+    ? `${SYSTEM_PROMPTS.chat}\n\nContext:\n${context}`
+    : SYSTEM_PROMPTS.chat
+  yield* streamAiChat(messages, systemPrompt, images)
 }

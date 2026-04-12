@@ -1,7 +1,11 @@
 import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { requireApiAuth } from '@/lib/auth/server'
-import { runIdeaPrompt } from '@/lib/ai'
+import { runIdeaPrompt, runTagPrompt } from '@/lib/ai'
+import { requireString, optionalString } from '@/lib/api/validate'
+import { handleRouteError } from '@/lib/api/errors'
+import { resolveNextArtifactVersion } from '@/lib/artifacts'
+import { embedArtifact } from '@/lib/ai/rag'
 
 export async function POST(request: Request) {
   let ctx
@@ -12,12 +16,10 @@ export async function POST(request: Request) {
   }
 
   try {
-    const body = await request.json() as { prompt: string; constraints?: string }
-    const { prompt, constraints } = body
+    const body = await request.json() as { prompt?: unknown; constraints?: unknown }
 
-    if (!prompt) {
-      return NextResponse.json({ error: 'prompt is required' }, { status: 400 })
-    }
+    const prompt = requireString(body.prompt, 'prompt', { max: 2000 })
+    const constraints = optionalString(body.constraints, 'constraints', { max: 1000 })
 
     const supabase = createServiceClient()
     const { workspaceId, user } = ctx
@@ -71,6 +73,11 @@ export async function POST(request: Request) {
       metadata: { latency_ms: latency },
     })
 
+    const version = await resolveNextArtifactVersion(supabase, {
+      workspaceId,
+      artifactType: 'idea_doc',
+    })
+
     const { data: artifact } = await supabase
       .from('artifacts')
       .insert({
@@ -80,21 +87,37 @@ export async function POST(request: Request) {
         title: `Ideas: ${prompt.slice(0, 60)}`,
         content: JSON.stringify({ prompt, constraints, ideas: result.ideas }, null, 2),
         format: 'json',
+        version,
+        is_latest: true,
         created_by: user.id,
       })
       .select()
       .single()
+
+    // Fire-and-forget: embed artifact + auto-tag ideas (don't block response)
+    void (async () => {
+      try {
+        if (artifact?.id) {
+          await embedArtifact(supabase, artifact.id, `${prompt} ${result.ideas.map(i => i.title + ' ' + i.brief).join(' ')}`)
+        }
+        // Tag each idea row
+        for (const idea of result.ideas) {
+          const tags = await runTagPrompt(`${idea.title} ${idea.brief} ${idea.problem} ${idea.solution}`)
+          if (tags.length > 0) {
+            await supabase.from('ideas').update({ tags }).eq('title', idea.title).eq('workspace_id', workspaceId)
+          }
+        }
+      } catch (bgErr) {
+        console.warn('[ideas] background task error:', bgErr)
+      }
+    })()
 
     return NextResponse.json({
       sessionId: session.id,
       artifactId: artifact?.id,
       ideas: result.ideas,
     })
-  } catch (err: unknown) {
-    console.error('[api/ai/ideas]', err)
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Internal server error' },
-      { status: 500 }
-    )
+  } catch (err) {
+    return handleRouteError(err, 'api/ai/ideas')
   }
 }

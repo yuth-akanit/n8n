@@ -6,12 +6,14 @@ export const SYSTEM_PROMPTS = {
   ideas: `You are a business idea advisor for a service business team.
 Generate practical, actionable ideas in response to the user's brief.
 Always respond with valid JSON matching the specified schema.
+IMPORTANT: Return raw JSON only — do NOT wrap it in markdown code fences (\`\`\`json ... \`\`\`).
 Focus on ideas that can realistically be implemented by a small internal team.
 You must respond strictly in Thai language in all textual content.`,
 
   project: `You are a senior project manager and software architect.
 Generate a structured project plan with milestones, tasks, and documentation.
 Always respond with valid JSON matching the specified schema.
+IMPORTANT: Return raw JSON only — do NOT wrap it in markdown code fences (\`\`\`json ... \`\`\`).
 Be practical and specific — not generic.
 You must respond strictly in Thai language in all textual content.`,
 
@@ -37,7 +39,7 @@ export const USER_PROMPTS = {
 Brief: ${prompt}
 ${constraints ? `Constraints: ${constraints}` : ''}
 
-Generate 3 specific, practical ideas for this service business team.
+Generate 10 specific, practical ideas for this service business team.
 Return JSON with this exact structure:
 {
   "ideas": [
@@ -116,7 +118,7 @@ ${JSON.stringify(pageData, null, 2)}
 Issues detected:
 ${issues.map((i) => `- ${i.issue_type}: ${i.message}`).join('\n')}
 
-Generate specific patch suggestions in JSON:
+Generate specific patch suggestions in raw JSON (no code fences):
 {
   "patches": [
     {

@@ -1,49 +1,45 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
-import { PageHeader } from '@/components/ui/PageHeader'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import Image from 'next/image'
 
 interface Message {
   role: 'user' | 'assistant'
   content: string
-  attachments?: string[] // Optional attachment URLs
+  attachments?: string[]
+  streaming?: boolean
 }
 
-export function ChatClient({ workspaceId }: { workspaceId: string }) {
+export function ChatClient({ workspaceId: _workspaceId }: { workspaceId: string }) {
   const [prompt, setPrompt] = useState('')
   const [messages, setMessages] = useState<Message[]>([])
-  const [loading, setLoading] = useState(false)
+  const [streaming, setStreaming] = useState(false)
   const [error, setError] = useState('')
   const [attachments, setAttachments] = useState<File[]>([])
   const [previews, setPreviews] = useState<string[]>([])
+  const [sessionId, setSessionId] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const chatEndRef = useRef<HTMLDivElement>(null)
+  const abortRef = useRef<AbortController | null>(null)
 
-  // Scroll to bottom on new message
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, loading])
+  }, [messages, streaming])
 
-  // Handle File Preview
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || [])
-    addFiles(files)
+    addFiles(Array.from(e.target.files || []))
   }
 
   const addFiles = (files: File[]) => {
     setAttachments(prev => [...prev, ...files])
-    const newPreviews = files.map(file => URL.createObjectURL(file))
-    setPreviews(prev => [...prev, ...newPreviews])
+    setPreviews(prev => [...prev, ...files.map(f => URL.createObjectURL(f))])
   }
 
-  // Handle Paste Event
   const handlePaste = (e: React.ClipboardEvent) => {
-    const items = e.clipboardData.items
     const files: File[] = []
-    for (let i = 0; i < items.length; i++) {
-      if (items[i].type.indexOf('image') !== -1) {
-        const blob = items[i].getAsFile()
+    for (let i = 0; i < e.clipboardData.items.length; i++) {
+      if (e.clipboardData.items[i].type.startsWith('image/')) {
+        const blob = e.clipboardData.items[i].getAsFile()
         if (blob) files.push(blob)
       }
     }
@@ -55,28 +51,21 @@ export function ChatClient({ workspaceId }: { workspaceId: string }) {
     setPreviews(prev => prev.filter((_, i) => i !== index))
   }
 
-  // Resize image to max dimensions and return base64
   function resizeImageToBase64(file: File, maxSize = 800): Promise<string> {
     return new Promise((resolve, reject) => {
       const img = document.createElement('img')
       const url = URL.createObjectURL(file)
       img.onload = () => {
         URL.revokeObjectURL(url)
-        const canvas = document.createElement('canvas')
         let { width, height } = img
         if (width > maxSize || height > maxSize) {
-          if (width > height) {
-            height = Math.round((height * maxSize) / width)
-            width = maxSize
-          } else {
-            width = Math.round((width * maxSize) / height)
-            height = maxSize
-          }
+          if (width > height) { height = Math.round((height * maxSize) / width); width = maxSize }
+          else { width = Math.round((width * maxSize) / height); height = maxSize }
         }
-        canvas.width = width
-        canvas.height = height
+        const canvas = document.createElement('canvas')
+        canvas.width = width; canvas.height = height
         const ctx = canvas.getContext('2d')
-        if (!ctx) { reject(new Error('No canvas context')); return }
+        if (!ctx) { reject(new Error('No canvas')); return }
         ctx.drawImage(img, 0, 0, width, height)
         resolve(canvas.toDataURL('image/jpeg', 0.7))
       }
@@ -85,51 +74,151 @@ export function ChatClient({ workspaceId }: { workspaceId: string }) {
     })
   }
 
-  async function handleSend(e: React.FormEvent) {
+  const handleSend = useCallback(async (e: React.FormEvent) => {
     e.preventDefault()
     if (!prompt.trim() && attachments.length === 0) return
+    if (streaming) return
 
     const currentPrompt = prompt
-    const curAttachments = [...previews]
+    const curPreviews = [...previews]
     const curFiles = [...attachments]
-    
+
     setPrompt('')
     setAttachments([])
     setPreviews([])
     setError('')
-    setMessages(prev => [...prev, { role: 'user', content: currentPrompt, attachments: curAttachments }])
-    setLoading(true)
+
+    // Add user message
+    setMessages(prev => [...prev, { role: 'user', content: currentPrompt, attachments: curPreviews }])
+
+    // Add placeholder assistant message (will be filled by stream)
+    setMessages(prev => [...prev, { role: 'assistant', content: '', streaming: true }])
+    setStreaming(true)
+
+    const abort = new AbortController()
+    abortRef.current = abort
 
     try {
-      // Resize and compress images before sending
       const imageBase64 = await Promise.all(
-        curFiles
-          .filter(f => f.type.startsWith('image/'))
-          .map(f => resizeImageToBase64(f))
+        curFiles.filter(f => f.type.startsWith('image/')).map(f => resizeImageToBase64(f))
       )
 
       const res = await fetch('/api/ai/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          workspaceId,
           prompt: currentPrompt || 'อธิบายรูปภาพนี้',
           images: imageBase64,
+          sessionId,
         }),
+        signal: abort.signal,
       })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error ?? 'Chat failed')
-      
-      setMessages(prev => [...prev, { role: 'assistant', content: data.content }])
+
+      if (!res.ok || !res.body) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error((data as { error?: string }).error ?? `HTTP ${res.status}`)
+      }
+
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() ?? ''
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue
+          const raw = line.slice(6).trim()
+          try {
+            const ev = JSON.parse(raw) as { text?: string; done?: boolean; sessionId?: string; error?: string }
+
+            if (ev.error) throw new Error(ev.error)
+
+            if (ev.text) {
+              // Append token to the last (streaming) assistant message
+              setMessages(prev => {
+                const next = [...prev]
+                const last = next[next.length - 1]
+                if (last.role === 'assistant') {
+                  next[next.length - 1] = { ...last, content: last.content + ev.text }
+                }
+                return next
+              })
+            }
+
+            if (ev.done) {
+              if (ev.sessionId) setSessionId(ev.sessionId)
+              // Mark streaming done
+              setMessages(prev => {
+                const next = [...prev]
+                const last = next[next.length - 1]
+                if (last.role === 'assistant') {
+                  next[next.length - 1] = { ...last, streaming: false }
+                }
+                return next
+              })
+            }
+          } catch (parseErr) {
+            if (parseErr instanceof Error && parseErr.message !== 'Unexpected end of JSON input') {
+              throw parseErr
+            }
+          }
+        }
+      }
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Something went wrong')
+      if (err instanceof Error && err.name === 'AbortError') return
+      const msg = err instanceof Error ? err.message : 'Something went wrong'
+      setError(msg)
+      // Remove the empty streaming placeholder on error
+      setMessages(prev => {
+        const next = [...prev]
+        if (next[next.length - 1]?.streaming) next.pop()
+        return next
+      })
     } finally {
-      setLoading(false)
+      setStreaming(false)
+      abortRef.current = null
     }
+  }, [prompt, attachments, previews, sessionId, streaming])
+
+  const handleStop = () => {
+    abortRef.current?.abort()
+  }
+
+  const handleNewChat = () => {
+    setMessages([])
+    setSessionId(null)
+    setError('')
   }
 
   return (
     <div className="flex flex-col h-[calc(100vh-140px)] sm:h-[calc(100vh-100px)]">
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-2 border-b border-slate-100 bg-white">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium text-slate-700">AI Chat</span>
+          {sessionId && (
+            <span className="text-xs text-slate-400 hidden sm:inline">
+              · จำบทสนทนาได้แล้ว
+            </span>
+          )}
+        </div>
+        {messages.length > 0 && (
+          <button
+            onClick={handleNewChat}
+            className="text-xs text-slate-400 hover:text-slate-600 transition-colors px-2 py-1 rounded-lg hover:bg-slate-100"
+          >
+            สนทนาใหม่
+          </button>
+        )}
+      </div>
+
+      {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-6">
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-slate-400">
@@ -145,7 +234,7 @@ export function ChatClient({ workspaceId }: { workspaceId: string }) {
 
         {messages.map((msg, i) => (
           <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-            <div className={`max-w-[85%] sm:max-w-[70%] space-y-2`}>
+            <div className="max-w-[85%] sm:max-w-[70%] space-y-2">
               {msg.attachments && msg.attachments.length > 0 && (
                 <div className={`flex flex-wrap gap-2 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                   {msg.attachments.map((url, idx) => (
@@ -156,38 +245,36 @@ export function ChatClient({ workspaceId }: { workspaceId: string }) {
                 </div>
               )}
               <div className={`p-4 rounded-2xl shadow-sm text-sm whitespace-pre-wrap leading-relaxed ${
-                msg.role === 'user' 
-                  ? 'bg-blue-600 text-white rounded-br-none' 
+                msg.role === 'user'
+                  ? 'bg-blue-600 text-white rounded-br-none'
                   : 'bg-white border border-slate-200 text-slate-800 rounded-bl-none'
               }`}>
                 {msg.content}
+                {msg.streaming && msg.content === '' && (
+                  <span className="inline-flex gap-1 mt-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-bounce" style={{ animationDelay: '0ms' }} />
+                    <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-bounce" style={{ animationDelay: '150ms' }} />
+                    <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-bounce" style={{ animationDelay: '300ms' }} />
+                  </span>
+                )}
+                {msg.streaming && msg.content !== '' && (
+                  <span className="inline-block w-0.5 h-4 bg-slate-400 animate-pulse ml-0.5 align-text-bottom" />
+                )}
               </div>
             </div>
           </div>
         ))}
-        {loading && (
-          <div className="flex justify-start">
-            <div className="bg-white border border-slate-200 p-4 rounded-2xl rounded-bl-none shadow-sm">
-              <div className="flex gap-1.5">
-                <div className="w-2 h-2 rounded-full bg-blue-500 animate-bounce" style={{ animationDelay: '0ms' }} />
-                <div className="w-2 h-2 rounded-full bg-blue-500 animate-bounce" style={{ animationDelay: '150ms' }} />
-                <div className="w-2 h-2 rounded-full bg-blue-500 animate-bounce" style={{ animationDelay: '300ms' }} />
-              </div>
-            </div>
-          </div>
-        )}
         <div ref={chatEndRef} />
       </div>
 
-      {/* Input Section */}
+      {/* Input */}
       <div className="p-4 bg-white border-t border-slate-200 sticky bottom-0">
-        {/* Previews */}
         {previews.length > 0 && (
           <div className="flex flex-wrap gap-2 mb-3 max-w-4xl mx-auto">
             {previews.map((url, i) => (
               <div key={i} className="relative w-20 h-20 rounded-lg overflow-hidden border border-slate-200 group">
                 <Image src={url} alt="Preview" fill className="object-cover" />
-                <button 
+                <button
                   onClick={() => removeAttachment(i)}
                   className="absolute top-1 right-1 bg-black/50 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
                 >
@@ -211,48 +298,47 @@ export function ChatClient({ workspaceId }: { workspaceId: string }) {
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault()
-                  handleSend(e as any)
+                  handleSend(e as unknown as React.FormEvent)
                 }
               }}
               onPaste={handlePaste}
-              disabled={loading}
+              disabled={streaming}
             />
-            
             <div className="flex items-center justify-between px-2 pb-2">
-              <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-colors"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                </svg>
+              </button>
+              <input type="file" ref={fileInputRef} className="hidden" multiple onChange={handleFileChange} />
+
+              {streaming ? (
                 <button
                   type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-colors"
+                  onClick={handleStop}
+                  className="bg-red-100 text-red-600 hover:bg-red-200 transition-colors py-1.5 px-4 rounded-xl text-sm font-medium"
                 >
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-                  </svg>
+                  หยุด
                 </button>
-                <input 
-                  type="file" 
-                  ref={fileInputRef} 
-                  className="hidden" 
-                  multiple 
-                  onChange={handleFileChange}
-                />
-              </div>
-
-              <button 
-                type="submit" 
-                className="btn-primary py-1.5 px-4" 
-                disabled={loading || (!prompt.trim() && attachments.length === 0)}
-              >
-                {loading ? '...' : (
+              ) : (
+                <button
+                  type="submit"
+                  className="btn-primary py-1.5 px-4"
+                  disabled={!prompt.trim() && attachments.length === 0}
+                >
                   <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 10l7-7m0 0l7 7m-7-7v18" />
                   </svg>
-                )}
-              </button>
+                </button>
+              )}
             </div>
           </div>
         </form>
-        {error && <p className="text-xs text-red-600 mt-2 text-center font-bold tracking-tight">{error}</p>}
+        {error && <p className="text-xs text-red-600 mt-2 text-center font-bold">{error}</p>}
       </div>
     </div>
   )

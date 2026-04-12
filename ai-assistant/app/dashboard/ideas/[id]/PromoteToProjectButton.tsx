@@ -35,7 +35,7 @@ export function PromoteToProjectButton({ ideaId, workspaceId }: Props) {
     <div>
       {error && <p className="text-xs text-red-600 mb-1">{error}</p>}
       <button onClick={handlePromote} disabled={loading} className="btn-primary">
-        {loading ? 'Creating project…' : 'Convert to Project →'}
+        {loading ? 'กำลังสร้าง + วางแผน AI…' : 'สร้าง Project →'}
       </button>
     </div>
   )
