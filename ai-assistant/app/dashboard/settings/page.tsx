@@ -159,8 +159,11 @@ export default async function SettingsPage() {
             <p>PINECONE_ASSISTANT_HOST</p>
             <p>PINECONE_ASSISTANT_NAME</p>
             <p className="pt-2 text-gray-400"># Notifications (cron)</p>
-            <p>CRON_SECRET</p>
-            <p>LINE_NOTIFY_TOKEN</p>
+            <p>CRON_SECRET  /* openssl rand -hex 32 */</p>
+            <p className="pt-2 text-gray-400"># LINE Messaging API (notify-bot ปิดแล้ว)</p>
+            <p>LINE_CHANNEL_ACCESS_TOKEN</p>
+            <p>LINE_USER_ID</p>
+            <p className="pt-2 text-gray-400"># Email via Resend (resend.com)</p>
             <p>RESEND_API_KEY</p>
             <p>NOTIFY_EMAIL_TO</p>
             <p>NOTIFY_EMAIL_FROM</p>
