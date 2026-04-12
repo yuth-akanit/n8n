@@ -162,6 +162,8 @@ export default async function SettingsPage() {
             <p>PINECONE_API_KEY</p>
             <p>PINECONE_ASSISTANT_HOST</p>
             <p>PINECONE_ASSISTANT_NAME</p>
+            <p className="pt-2 text-gray-400"># Image Generation (fal.ai)</p>
+            <p>FAL_KEY</p>
             <p className="pt-2 text-gray-400"># Notifications (cron)</p>
             <p>CRON_SECRET  /* openssl rand -hex 32 */</p>
             <p className="pt-2 text-gray-400"># LINE Messaging API (notify-bot ปิดแล้ว)</p>
@@ -183,6 +185,7 @@ export default async function SettingsPage() {
               { name: 'Builder Studio', path: '/dashboard/builder' },
               { name: 'SEO Doctor', path: '/dashboard/seo' },
               { name: 'AI Chat', path: '/dashboard/chat' },
+              { name: 'Image Studio', path: '/dashboard/image' },
             ].map((m) => (
               <li key={m.name} className="flex justify-between">
                 <span className="text-gray-700">{m.name}</span>
