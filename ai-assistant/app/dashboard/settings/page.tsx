@@ -156,8 +156,14 @@ export default async function SettingsPage() {
             <p className="pt-2 text-gray-400"># Additional Services</p>
             <p>TAVILY_API_KEY</p>
             <p>PINECONE_API_KEY</p>
-            <p>PINECONE_INDEX</p>
-            <p>FAL_KEY</p>
+            <p>PINECONE_ASSISTANT_HOST</p>
+            <p>PINECONE_ASSISTANT_NAME</p>
+            <p className="pt-2 text-gray-400"># Notifications (cron)</p>
+            <p>CRON_SECRET</p>
+            <p>LINE_NOTIFY_TOKEN</p>
+            <p>RESEND_API_KEY</p>
+            <p>NOTIFY_EMAIL_TO</p>
+            <p>NOTIFY_EMAIL_FROM</p>
           </div>
         </div>
 

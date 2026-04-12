@@ -4,6 +4,7 @@ import { streamChat, type ChatMessage } from '@/lib/ai'
 import { requireString, optionalString } from '@/lib/api/validate'
 import { handleRouteError } from '@/lib/api/errors'
 import { findRelevantContext } from '@/lib/ai/rag'
+import { queryPineconeAssistant } from '@/lib/ai/pinecone-assistant'
 
 export const maxDuration = 120 // seconds — streaming needs longer window
 export const dynamic = 'force-dynamic'
@@ -113,6 +114,10 @@ export async function POST(request: Request) {
     // RAG: inject relevant workspace artifacts as context
     const ragContext = await findRelevantContext(supabase, prompt, workspaceId)
     if (ragContext) finalContext += `\n\n${ragContext}`
+
+    // Pinecone Assistant: query company documents (service standards, guides, etc.)
+    const pineconeContext = await queryPineconeAssistant(prompt)
+    if (pineconeContext) finalContext += `\n\n${pineconeContext}`
 
     // Optionally enrich with Tavily web search
     if (process.env.TAVILY_API_KEY) {

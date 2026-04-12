@@ -8,6 +8,7 @@ import { streamChat, type ChatMessage } from '@/lib/ai'
 import { requireString, optionalString } from '@/lib/api/validate'
 import { handleRouteError } from '@/lib/api/errors'
 import { getWorkspaceContext, withWorkspaceContext } from '@/lib/ai/workspace-context'
+import { queryPineconeAssistant } from '@/lib/ai/pinecone-assistant'
 import { SYSTEM_PROMPTS } from '@/lib/ai/prompts'
 import type { Idea } from '@/types'
 
@@ -115,6 +116,12 @@ When suggesting changes to the idea, be explicit about what field should change 
       content: prompt,
     })
 
+    // Enrich system prompt with Pinecone company documents if relevant
+    const pineconeCtx = await queryPineconeAssistant(`${i.title} ${prompt}`)
+    const enrichedSystemPrompt = pineconeCtx
+      ? `${systemPrompt}\n\n${pineconeCtx}`
+      : systemPrompt
+
     const aiMessages: ChatMessage[] = [
       ...historyMessages,
       { role: 'user', content: prompt },
@@ -130,7 +137,7 @@ When suggesting changes to the idea, be explicit about what field should change 
         }
 
         try {
-          for await (const chunk of streamChat(aiMessages, systemPrompt)) {
+          for await (const chunk of streamChat(aiMessages, enrichedSystemPrompt)) {
             fullContent += chunk
             send({ text: chunk })
           }
