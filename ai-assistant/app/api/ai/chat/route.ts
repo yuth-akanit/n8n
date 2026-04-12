@@ -50,6 +50,21 @@ export async function POST(request: Request) {
     const { workspaceId, user } = ctx
 
     // Load or create session
+    const createSession = async (): Promise<string> => {
+      const { data: session, error } = await supabase
+        .from('ai_sessions')
+        .insert({
+          workspace_id: workspaceId,
+          module: 'chat',
+          title: `Chat: ${prompt.slice(0, 60)}`,
+          created_by: user.id,
+        })
+        .select('id')
+        .single()
+      if (error) throw error
+      return session.id
+    }
+
     let activeSessionId: string
     let historyMessages: ChatMessage[] = []
 
@@ -81,21 +96,6 @@ export async function POST(request: Request) {
       }
     } else {
       activeSessionId = await createSession()
-    }
-
-    async function createSession(): Promise<string> {
-      const { data: session, error } = await supabase
-        .from('ai_sessions')
-        .insert({
-          workspace_id: workspaceId,
-          module: 'chat',
-          title: `Chat: ${prompt.slice(0, 60)}`,
-          created_by: user.id,
-        })
-        .select('id')
-        .single()
-      if (error) throw error
-      return session.id
     }
 
     // Save the user message immediately

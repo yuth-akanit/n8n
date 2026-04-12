@@ -68,6 +68,21 @@ When suggesting changes to the idea, be explicit about what field should change 
     const systemPrompt = withWorkspaceContext(baseSystemPrompt, wsContext)
 
     // Load or create session
+    const createSession = async (): Promise<string> => {
+      const { data: s, error } = await supabase
+        .from('ai_sessions')
+        .insert({
+          workspace_id: workspaceId,
+          module: 'idea',
+          title: `Refine: ${i.title.slice(0, 60)}`,
+          created_by: user.id,
+        })
+        .select('id')
+        .single()
+      if (error) throw error
+      return s.id
+    }
+
     let activeSessionId: string
     let historyMessages: ChatMessage[] = []
 
@@ -93,21 +108,6 @@ When suggesting changes to the idea, be explicit about what field should change 
       }
     } else {
       activeSessionId = await createSession()
-    }
-
-    async function createSession(): Promise<string> {
-      const { data: s, error } = await supabase
-        .from('ai_sessions')
-        .insert({
-          workspace_id: workspaceId,
-          module: 'idea',
-          title: `Refine: ${i.title.slice(0, 60)}`,
-          created_by: user.id,
-        })
-        .select('id')
-        .single()
-      if (error) throw error
-      return s.id
     }
 
     // Save user message

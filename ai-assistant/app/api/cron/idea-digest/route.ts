@@ -9,7 +9,7 @@
  */
 import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
-import { runAiPrompt } from '@/lib/ai'
+import { runChatPrompt } from '@/lib/ai'
 import { sendLineNotify } from '@/lib/notify/line'
 import { sendEmail } from '@/lib/notify/email'
 
@@ -58,10 +58,8 @@ export async function POST(request: Request) {
           .map((i, n) => `${n + 1}. "${i.title}" — ${i.brief?.slice(0, 80)} [ROI:${i.score_roi ?? '?'} Impact:${i.score_impact ?? '?'}]`)
           .join('\n')
 
-        const aiResult = await runAiPrompt(
-          'ideas',
-          `สรุป weekly idea digest สั้น ๆ ภายใน 5 ประโยค ไฮไลต์ idea ที่น่าสนใจที่สุดและ action ที่แนะนำ:\n\n${ideaList}`,
-          'You are a business advisor. Respond in Thai. Be concise and actionable.'
+        const aiResult = await runChatPrompt(
+          `สรุป weekly idea digest สั้น ๆ ภายใน 5 ประโยค ไฮไลต์ idea ที่น่าสนใจที่สุดและ action ที่แนะนำ:\n\n${ideaList}`
         )
 
         const msg = `📊 Weekly Idea Digest — ${ws.name}\n${new Date().toLocaleDateString('th-TH')}\n\n${aiResult.content}\n\n🔗 ดู ideas ทั้งหมด: ai-workspace.paaair.online/dashboard/ideas`
