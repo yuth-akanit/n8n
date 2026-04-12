@@ -3,13 +3,21 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { requireApiAuth } from '@/lib/auth/server'
 import { resolveNextArtifactVersion } from '@/lib/artifacts'
 
-type ImageStyle = 'realistic' | 'illustration' | 'anime' | 'logo' | 'product' | 'ui_mockup'
+type ImageStyle =
+  | 'realistic' | 'illustration' | 'anime' | 'logo' | 'product' | 'ui_mockup'
+  | 'watercolor' | 'oil_painting' | 'pixel_art' | 'cinematic' | 'flat_design' | 'sketch'
 type ImageSize = 'square' | 'landscape' | 'portrait'
 
 const STYLE_PREFIXES: Record<ImageStyle, string> = {
   realistic:    '',
+  cinematic:    'cinematic photography, dramatic lighting, golden hour, depth of field, 8K, ',
   illustration: 'digital illustration, vibrant colors, detailed artwork, ',
+  watercolor:   'watercolor painting, soft washes, delicate brushstrokes, artistic, ',
+  oil_painting: 'oil painting, thick impasto texture, rich colors, canvas, classical art style, ',
+  sketch:       'pencil sketch, hand-drawn, fine linework, graphite on paper, ',
   anime:        'anime style, manga art, Studio Ghibli inspired, ',
+  pixel_art:    '8-bit pixel art, retro game style, pixelated, low-res aesthetic, ',
+  flat_design:  'flat design, minimal vector illustration, clean shapes, bold colors, ',
   logo:         'minimal logo design, clean vector, professional brand, white background, ',
   product:      'product photography, studio lighting, white background, high quality, ',
   ui_mockup:    'professional UI/UX mockup, Dribbble style, clean modern interface, ',
@@ -41,6 +49,7 @@ export async function POST(request: Request) {
       prompt?: unknown
       style?: unknown
       size?: unknown
+      numImages?: unknown
     }
 
     const rawPrompt = typeof body.prompt === 'string' ? body.prompt.trim() : ''
@@ -61,8 +70,11 @@ export async function POST(request: Request) {
         ? (body.size as ImageSize)
         : 'square'
 
-    const finalPrompt = `${STYLE_PREFIXES[style]}${rawPrompt}`
+    const numImages = Math.min(4, Math.max(1,
+      typeof body.numImages === 'number' ? Math.floor(body.numImages) : 1
+    ))
 
+    const finalPrompt = `${STYLE_PREFIXES[style]}${rawPrompt}`
     const start = Date.now()
 
     // ── fal.ai Flux Schnell ──────────────────────────────────────────────────
@@ -74,49 +86,50 @@ export async function POST(request: Request) {
         prompt: finalPrompt,
         image_size: SIZE_MAP[size],
         num_inference_steps: 4,
-        num_images: 1,
+        num_images: numImages,
       },
-    })) as { images: Array<{ url: string; width: number; height: number }> }
+    })) as { images: Array<{ url: string }> }
 
-    const imageUrl = falResult.images?.[0]?.url
-    if (!imageUrl) {
+    const imageUrls = (falResult.images ?? []).map(img => img.url).filter(Boolean)
+    if (imageUrls.length === 0) {
       return NextResponse.json({ error: 'Image generation returned no result' }, { status: 502 })
     }
 
     const latency = Date.now() - start
 
-    // ── Persist to artifacts ─────────────────────────────────────────────────
+    // ── Persist each image as an artifact ───────────────────────────────────
     const supabase = createServiceClient()
     const { workspaceId, user } = ctx
 
-    const version = await resolveNextArtifactVersion(supabase, {
-      workspaceId,
-      artifactType: 'image',
-    })
+    const artifactIds: string[] = []
+    for (const url of imageUrls) {
+      const version = await resolveNextArtifactVersion(supabase, { workspaceId, artifactType: 'image' })
+      const { data: artifact } = await supabase
+        .from('artifacts')
+        .insert({
+          workspace_id: workspaceId,
+          artifact_type: 'image',
+          title: rawPrompt.slice(0, 80),
+          content: url,
+          format: 'url',
+          version,
+          is_latest: true,
+          created_by: user.id,
+        })
+        .select('id')
+        .single()
+      if (artifact?.id) artifactIds.push(artifact.id)
+    }
 
-    const { data: artifact } = await supabase
-      .from('artifacts')
-      .insert({
-        workspace_id: workspaceId,
-        artifact_type: 'image',
-        title: rawPrompt.slice(0, 80),
-        content: imageUrl,
-        format: 'url',
-        version,
-        is_latest: true,
-        created_by: user.id,
-      })
-      .select('id')
-      .single()
-
-    console.log(`[api/ai/image] generated in ${latency}ms, style=${style}, size=${size}`)
+    console.log(`[api/ai/image] ${numImages} image(s) in ${latency}ms, style=${style}, size=${size}`)
 
     return NextResponse.json({
-      imageUrl,
-      artifactId: artifact?.id,
+      imageUrls,
+      artifactIds,
       prompt: rawPrompt,
       style,
       size,
+      numImages,
       latency_ms: latency,
     })
   } catch (err: unknown) {
