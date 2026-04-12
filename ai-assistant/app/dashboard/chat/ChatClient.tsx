@@ -2,6 +2,8 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react'
 import Image from 'next/image'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 
 interface Message {
   role: 'user' | 'assistant'
@@ -244,21 +246,39 @@ export function ChatClient({ workspaceId: _workspaceId }: { workspaceId: string 
                   ))}
                 </div>
               )}
-              <div className={`p-4 rounded-2xl shadow-sm text-sm whitespace-pre-wrap leading-relaxed ${
+              <div className={`p-4 rounded-2xl shadow-sm text-sm leading-relaxed ${
                 msg.role === 'user'
-                  ? 'bg-blue-600 text-white rounded-br-none'
+                  ? 'bg-blue-600 text-white rounded-br-none whitespace-pre-wrap'
                   : 'bg-white border border-slate-200 text-slate-800 rounded-bl-none'
               }`}>
-                {msg.content}
-                {msg.streaming && msg.content === '' && (
-                  <span className="inline-flex gap-1 mt-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-bounce" style={{ animationDelay: '0ms' }} />
-                    <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-bounce" style={{ animationDelay: '150ms' }} />
-                    <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-bounce" style={{ animationDelay: '300ms' }} />
-                  </span>
-                )}
-                {msg.streaming && msg.content !== '' && (
-                  <span className="inline-block w-0.5 h-4 bg-slate-400 animate-pulse ml-0.5 align-text-bottom" />
+                {msg.role === 'user' ? (
+                  msg.content
+                ) : (
+                  <div className="prose prose-sm prose-slate max-w-none
+                    prose-headings:font-semibold prose-headings:text-slate-800
+                    prose-h1:text-base prose-h2:text-sm prose-h3:text-sm
+                    prose-p:my-1.5 prose-p:leading-relaxed
+                    prose-ul:my-1.5 prose-ol:my-1.5
+                    prose-li:my-0.5
+                    prose-table:text-xs prose-th:bg-slate-50 prose-th:px-2 prose-th:py-1
+                    prose-td:px-2 prose-td:py-1 prose-td:border prose-td:border-slate-200
+                    prose-code:bg-slate-100 prose-code:px-1 prose-code:rounded prose-code:text-xs
+                    prose-pre:bg-slate-900 prose-pre:text-slate-100
+                    prose-strong:text-slate-900 prose-a:text-blue-600">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      {msg.content}
+                    </ReactMarkdown>
+                    {msg.streaming && msg.content === '' && (
+                      <span className="inline-flex gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-bounce" style={{ animationDelay: '0ms' }} />
+                        <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-bounce" style={{ animationDelay: '150ms' }} />
+                        <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-bounce" style={{ animationDelay: '300ms' }} />
+                      </span>
+                    )}
+                    {msg.streaming && msg.content !== '' && (
+                      <span className="inline-block w-0.5 h-4 bg-slate-400 animate-pulse ml-0.5 align-text-bottom" />
+                    )}
+                  </div>
                 )}
               </div>
             </div>

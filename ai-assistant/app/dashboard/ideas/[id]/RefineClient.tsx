@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 
 interface Message {
   role: 'user' | 'assistant'
@@ -137,12 +139,16 @@ export function RefineClient({ ideaId }: { ideaId: string }) {
         )}
         {messages.map((msg, i) => (
           <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-            <div className={`max-w-[85%] px-3 py-2 rounded-xl text-sm leading-relaxed whitespace-pre-wrap ${
+            <div className={`max-w-[85%] px-3 py-2 rounded-xl text-sm leading-relaxed ${
               msg.role === 'user'
-                ? 'bg-blue-600 text-white rounded-br-none'
+                ? 'bg-blue-600 text-white rounded-br-none whitespace-pre-wrap'
                 : 'bg-slate-100 text-slate-800 rounded-bl-none'
             }`}>
-              {msg.content}
+              {msg.role === 'user' ? msg.content : (
+                <div className="prose prose-sm max-w-none prose-p:my-1 prose-headings:text-sm prose-headings:font-semibold prose-table:text-xs prose-code:text-xs prose-code:bg-white prose-code:px-1 prose-code:rounded">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
+                </div>
+              )}
               {msg.streaming && msg.content === '' && (
                 <span className="inline-flex gap-1">
                   <span className="w-1 h-1 rounded-full bg-slate-400 animate-bounce" style={{ animationDelay: '0ms' }} />
