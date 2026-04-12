@@ -67,7 +67,7 @@ export async function POST(request: Request) {
 
         if (!audit) continue
 
-        const aiResult = await runSeoSummaryPrompt(pageData as Record<string, unknown>, issues)
+        const aiResult = await runSeoSummaryPrompt(pageData as unknown as Record<string, unknown>, issues)
 
         await supabase.from('seo_audits').update({
           status: 'completed',
