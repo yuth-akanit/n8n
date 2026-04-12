@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { PageHeader } from '@/components/ui/PageHeader'
 
 type ImageStyle =
@@ -41,6 +41,13 @@ interface GeneratedImage {
   latency_ms: number
 }
 
+interface HistoryItem {
+  id: string
+  title: string
+  content: string // imageUrl
+  created_at: string
+}
+
 export function ImageClient() {
   const [prompt, setPrompt]       = useState('')
   const [style, setStyle]         = useState<ImageStyle>('realistic')
@@ -49,7 +56,23 @@ export function ImageClient() {
   const [loading, setLoading]     = useState(false)
   const [error, setError]         = useState('')
   const [result, setResult]       = useState<GeneratedImage | null>(null)
-  const [selected, setSelected]   = useState(0) // index of currently viewed image
+  const [selected, setSelected]   = useState(0)
+  const [history, setHistory]     = useState<HistoryItem[]>([])
+  const [historyLoading, setHistoryLoading] = useState(true)
+
+  const loadHistory = useCallback(async () => {
+    try {
+      const res = await fetch('/api/artifacts?type=image&limit=40')
+      const data = await res.json() as HistoryItem[]
+      setHistory(Array.isArray(data) ? data : [])
+    } catch {
+      // history is best-effort
+    } finally {
+      setHistoryLoading(false)
+    }
+  }, [])
+
+  useEffect(() => { void loadHistory() }, [loadHistory])
 
   async function handleGenerate(e: React.FormEvent) {
     e.preventDefault()
@@ -67,6 +90,7 @@ export function ImageClient() {
       const data = await res.json() as GeneratedImage & { error?: string }
       if (!res.ok) throw new Error(data.error ?? 'Generation failed')
       setResult(data)
+      void loadHistory() // refresh history after new generation
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Something went wrong')
     } finally {
@@ -292,6 +316,61 @@ export function ImageClient() {
             </div>
           )}
         </div>
+      </div>
+
+      {/* ── History gallery ──────────────────────────────────────────────── */}
+      <div className="mt-10">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-sm font-semibold text-gray-700">ประวัติรูปที่สร้าง</h2>
+          {history.length > 0 && (
+            <span className="text-xs text-gray-400">{history.length} รูป</span>
+          )}
+        </div>
+
+        {historyLoading ? (
+          <div className="flex items-center gap-2 text-xs text-gray-400 py-4">
+            <span className="w-4 h-4 border-2 border-gray-300 border-t-transparent rounded-full animate-spin" />
+            กำลังโหลด…
+          </div>
+        ) : history.length === 0 ? (
+          <p className="text-xs text-gray-400 py-4">ยังไม่มีประวัติ — สร้างรูปแรกได้เลย</p>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2">
+            {history.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => {
+                  setResult({
+                    imageUrls: [item.content],
+                    artifactIds: [item.id],
+                    prompt: item.title,
+                    style: 'realistic',
+                    size: 'square',
+                    numImages: 1,
+                    latency_ms: 0,
+                  })
+                  setSelected(0)
+                  window.scrollTo({ top: 0, behavior: 'smooth' })
+                }}
+                className="group relative rounded-lg overflow-hidden aspect-square border border-gray-100 hover:border-blue-400 transition-colors"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={item.content}
+                  alt={item.title}
+                  className="w-full h-full object-cover"
+                />
+                {/* Hover overlay with prompt */}
+                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/50 transition-colors flex items-end">
+                  <p className="text-white text-[10px] leading-tight p-1.5 opacity-0 group-hover:opacity-100 transition-opacity line-clamp-2">
+                    {item.title}
+                  </p>
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )
