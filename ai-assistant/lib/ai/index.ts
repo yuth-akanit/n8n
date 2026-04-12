@@ -42,7 +42,10 @@ export async function runIdeaPrompt(
   try {
     const parsed = JSON.parse(extractJson(result.content)) as { ideas: GeneratedIdea[] }
     ideas = parsed.ideas ?? []
-  } catch {
+  } catch (parseErr) {
+    console.error('[ideas] JSON parse failed. Raw content (first 500):', result.content.slice(0, 500))
+    console.error('[ideas] extractJson result (first 500):', extractJson(result.content).slice(0, 500))
+    console.error('[ideas] parse error:', parseErr)
     // If AI didn't return valid JSON, wrap in a single idea
     ideas = [{
       title: 'Generated Idea',
