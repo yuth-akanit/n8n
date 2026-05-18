@@ -344,6 +344,9 @@
       </svg>
       ตั้งค่า
     </button>
+    <button class="btn" onclick="resetToDemo()" title="กลับไป Demo Mode" style="color:#a78bfa;border-color:#4a3f8a">
+      ⚡ Demo
+    </button>
   </div>
 </header>
 
@@ -605,10 +608,48 @@ async function fetchSupabase(days) {
   return res.json();
 }
 
+function setBanner(type, msg) {
+  const el = document.getElementById('demo-banner');
+  const span = el.querySelector('span');
+  el.classList.remove('hidden');
+  if (type === 'demo') {
+    el.style.background = 'linear-gradient(90deg,#1c1a30,#1a2030)';
+    el.style.borderBottomColor = '#4a3f8a';
+    el.style.color = '#a78bfa';
+    span.innerHTML = '⚡ <strong>DEMO MODE</strong> — แสดงข้อมูลตัวอย่าง กด "ตั้งค่า" เพื่อเชื่อมต่อ Supabase จริง';
+  } else if (type === 'empty') {
+    el.style.background = 'rgba(210,153,34,0.12)';
+    el.style.borderBottomColor = 'rgba(210,153,34,0.4)';
+    el.style.color = '#d29922';
+    span.innerHTML = '📭 Supabase เชื่อมต่อแล้ว แต่ยังไม่มีข้อมูล — แสดง Demo แทน รัน SQL schema และ import n8n workflow เพื่อเริ่ม log จริง';
+  } else if (type === 'error') {
+    el.style.background = 'rgba(248,81,73,0.1)';
+    el.style.borderBottomColor = 'rgba(248,81,73,0.3)';
+    el.style.color = '#f85149';
+    span.innerHTML = `⚠️ Supabase error: ${msg} — แสดง Demo แทน`;
+  } else {
+    el.classList.add('hidden');
+  }
+}
+
 async function getData() {
   const days = cfg.range === '1d' ? 1 : cfg.range === '7d' ? 7 : 30;
-  if (cfg.demo || !cfg.url || !cfg.key) return demoData(days);
-  return fetchSupabase(days);
+  if (cfg.demo || !cfg.url || !cfg.key) {
+    setBanner('demo');
+    return demoData(days);
+  }
+  try {
+    const rows = await fetchSupabase(days);
+    if (rows.length === 0) {
+      setBanner('empty');
+      return demoData(days);
+    }
+    setBanner('off');
+    return rows;
+  } catch (e) {
+    setBanner('error', e.message);
+    return demoData(days);
+  }
 }
 
 // ─────────────────────────────────────────────
@@ -871,6 +912,13 @@ async function loadDashboard() {
 // ─────────────────────────────────────────────
 function onRangeChange(v) { cfg.range = v; saveCfg(); loadDashboard(); }
 function refresh() { loadDashboard(); }
+function resetToDemo() {
+  cfg.demo = true;
+  cfg.url = '';
+  cfg.key = '';
+  saveCfg();
+  loadDashboard();
+}
 
 function openSettings() {
   document.getElementById('cfg-url').value       = cfg.url;
@@ -899,7 +947,7 @@ function saveSettings() {
 // ─────────────────────────────────────────────
 loadCfg();
 document.getElementById('time-range').value = cfg.range;
-document.getElementById('demo-banner').classList.toggle('hidden', !cfg.demo && !!cfg.url);
+// getData() will call setBanner() based on actual state
 loadDashboard();
 setInterval(loadDashboard, 60000);
 </script>
