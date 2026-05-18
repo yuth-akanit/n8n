@@ -1,0 +1,169 @@
+{
+  "name": "AI Token Usage Logger",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "log-ai-usage",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-log-ai",
+      "name": "Webhook: Log AI Usage",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [-800, 300],
+      "webhookId": "log-ai-usage-001"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "sb-url",
+              "name": "supabase_url",
+              "value": "https://YOUR_PROJECT.supabase.co",
+              "type": "string"
+            },
+            {
+              "id": "sb-key",
+              "name": "supabase_key",
+              "value": "YOUR_SERVICE_ROLE_KEY",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "config-node",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [-580, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ── AI Token Usage Logger — Cost Calculator ──\n// Accepts POST body: { provider, model, prompt_tokens, completion_tokens,\n//                      workflow_name, node_name, status, metadata }\n\nconst PRICE = {\n  // OpenAI\n  'gpt-4o':                       { i: 0.0025,   o: 0.01    },\n  'gpt-4o-mini':                  { i: 0.00015,  o: 0.0006  },\n  'gpt-4-turbo':                  { i: 0.01,     o: 0.03    },\n  'gpt-3.5-turbo':                { i: 0.0005,   o: 0.0015  },\n  // Anthropic\n  'claude-3-5-sonnet-20241022':   { i: 0.003,    o: 0.015   },\n  'claude-3-5-haiku-20241022':    { i: 0.0008,   o: 0.004   },\n  'claude-3-opus-20240229':       { i: 0.015,    o: 0.075   },\n  'claude-3-haiku-20240307':      { i: 0.00025,  o: 0.00125 },\n  // Google\n  'gemini-1.5-pro':               { i: 0.00125,  o: 0.005   },\n  'gemini-1.5-flash':             { i: 0.000075, o: 0.0003  },\n  'gemini-2.0-flash':             { i: 0,        o: 0       },\n  // Groq\n  'llama-3.3-70b-versatile':      { i: 0.00059,  o: 0.00079 },\n  'llama-3.1-8b-instant':         { i: 0.00005,  o: 0.00008 },\n  'mixtral-8x7b-32768':           { i: 0.00024,  o: 0.00024 },\n};\n\nconst items = $input.all();\nconst results = [];\n\nfor (const item of items) {\n  const body = item.json.body || item.json || {};\n\n  const provider         = (body.provider || 'unknown').toLowerCase();\n  const model            = body.model || 'unknown';\n  const prompt_tokens    = parseInt(body.prompt_tokens)    || 0;\n  const completion_tokens = parseInt(body.completion_tokens) || 0;\n  const total_tokens     = prompt_tokens + completion_tokens;\n  const workflow_name    = body.workflow_name || null;\n  const node_name        = body.node_name    || null;\n  const status           = body.status       || 'success';\n  const metadata         = body.metadata     || {};\n\n  // Cost calculation (USD per 1K tokens)\n  const p = PRICE[model] || { i: 0, o: 0 };\n  const cost_usd = (prompt_tokens / 1000 * p.i) + (completion_tokens / 1000 * p.o);\n\n  results.push({\n    json: {\n      supabase_url: item.json.supabase_url,\n      supabase_key: item.json.supabase_key,\n      record: {\n        provider,\n        model,\n        prompt_tokens,\n        completion_tokens,\n        total_tokens,\n        cost_usd: parseFloat(cost_usd.toFixed(8)),\n        workflow_name,\n        node_name,\n        status,\n        metadata,\n      }\n    }\n  });\n}\n\nreturn results;"
+      },
+      "id": "calc-cost",
+      "name": "Calculate Cost",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-360, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.supabase_url }}/rest/v1/ai_token_usage",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey",        "value": "={{ $json.supabase_key }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $json.supabase_key }}" },
+            { "name": "Content-Type",  "value": "application/json" },
+            { "name": "Prefer",        "value": "return=minimal" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.record) }}",
+        "options": {}
+      },
+      "id": "insert-supabase",
+      "name": "Insert to Supabase",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-140, 300],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { success: true, total_tokens: $('Calculate Cost').item.json.record.total_tokens, cost_usd: $('Calculate Cost').item.json.record.cost_usd } }}",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              { "name": "Content-Type",                "value": "application/json; charset=utf-8" },
+              { "name": "Access-Control-Allow-Origin",  "value": "*" }
+            ]
+          }
+        }
+      },
+      "id": "respond-ok",
+      "name": "Respond OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [80, 240]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { success: false, error: $json.message || 'Insert failed' } }}",
+        "options": {
+          "responseCode": 500,
+          "responseHeaders": {
+            "entries": [
+              { "name": "Content-Type",                "value": "application/json; charset=utf-8" },
+              { "name": "Access-Control-Allow-Origin",  "value": "*" }
+            ]
+          }
+        }
+      },
+      "id": "respond-err",
+      "name": "Respond Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [80, 420]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": false, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "check-status",
+              "leftValue": "={{ $json.statusCode }}",
+              "rightValue": 300,
+              "operator": { "type": "number", "operation": "lt" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-insert",
+      "name": "Insert OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [-60, 320]
+    }
+  ],
+  "connections": {
+    "Webhook: Log AI Usage": {
+      "main": [[{ "node": "Config", "type": "main", "index": 0 }]]
+    },
+    "Config": {
+      "main": [[{ "node": "Calculate Cost", "type": "main", "index": 0 }]]
+    },
+    "Calculate Cost": {
+      "main": [[{ "node": "Insert to Supabase", "type": "main", "index": 0 }]]
+    },
+    "Insert to Supabase": {
+      "main": [[{ "node": "Insert OK?", "type": "main", "index": 0 }]]
+    },
+    "Insert OK?": {
+      "main": [
+        [{ "node": "Respond OK",    "type": "main", "index": 0 }],
+        [{ "node": "Respond Error", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "staticData": null,
+  "meta": { "templateCredsSetupCompleted": true },
+  "pinData": {}
+}

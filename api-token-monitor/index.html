@@ -1,0 +1,907 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Token Monitor</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --surface2: #1c2231;
+      --border: #30363d;
+      --text: #e6edf3;
+      --text-muted: #8b949e;
+      --accent: #58a6ff;
+      --success: #3fb950;
+      --warning: #d29922;
+      --danger: #f85149;
+      --openai: #10a37f;
+      --anthropic: #d4663a;
+      --google: #4285f4;
+      --groq: #f55036;
+      --meta: #0064e0;
+      --mistral: #ff7722;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Kanit, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    /* ── Header ── */
+    .header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .logo {
+      font-size: 18px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .logo-icon {
+      width: 32px;
+      height: 32px;
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+    }
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .time-range-select {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .btn {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 13px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: background 0.15s;
+      white-space: nowrap;
+    }
+    .btn:hover { background: var(--border); }
+    .btn-primary {
+      background: #6366f1;
+      border-color: #6366f1;
+      color: #fff;
+      font-weight: 600;
+    }
+    .btn-primary:hover { background: #5254cc; }
+
+    /* ── Demo banner ── */
+    .demo-banner {
+      background: linear-gradient(90deg, #1c1a30, #1a2030);
+      border-bottom: 1px solid #4a3f8a;
+      padding: 8px 24px;
+      font-size: 13px;
+      color: #a78bfa;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .demo-banner.hidden { display: none; }
+
+    /* ── Main ── */
+    .main {
+      padding: 24px;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    /* ── Alert bar ── */
+    .alert-bar {
+      background: rgba(248,81,73,0.1);
+      border: 1px solid rgba(248,81,73,0.3);
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin-bottom: 20px;
+      font-size: 13px;
+      color: var(--danger);
+      align-items: center;
+      gap: 8px;
+      display: none;
+    }
+    .alert-bar.show { display: flex; }
+
+    /* ── Stat cards ── */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px;
+    }
+    .stat-label {
+      font-size: 11px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      margin-bottom: 8px;
+    }
+    .stat-value {
+      font-size: 30px;
+      font-weight: 700;
+      line-height: 1;
+      margin-bottom: 6px;
+    }
+    .stat-sub {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    /* ── Charts ── */
+    .charts-grid {
+      display: grid;
+      grid-template-columns: 300px 1fr;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    @media (max-width: 900px) { .charts-grid { grid-template-columns: 1fr; } }
+    .chart-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px;
+    }
+    .card-title {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      color: var(--text);
+    }
+    .chart-wrap { position: relative; height: 260px; }
+
+    /* ── Tables ── */
+    .section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      margin-bottom: 24px;
+      overflow: hidden;
+    }
+    .section-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th {
+      padding: 10px 16px;
+      text-align: left;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      color: var(--text-muted);
+      background: var(--surface2);
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    td {
+      padding: 11px 16px;
+      border-bottom: 1px solid #21262d;
+      vertical-align: middle;
+    }
+    tr:last-child td { border-bottom: none; }
+    tbody tr:hover td { background: rgba(255,255,255,0.025); }
+    .tr { text-align: right; }
+    .muted { color: var(--text-muted); }
+    .mono { font-family: 'Courier New', monospace; font-size: 12px; }
+
+    /* ── Badges ── */
+    .provider-badge { display: inline-flex; align-items: center; gap: 8px; font-weight: 500; }
+    .dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .badge-ok   { background: rgba(63,185,80,0.15);  color: var(--success); }
+    .badge-err  { background: rgba(248,81,73,0.15);  color: var(--danger);  }
+
+    /* ── Modal ── */
+    .overlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.7);
+      z-index: 200;
+      display: flex; align-items: center; justify-content: center;
+      padding: 24px;
+      opacity: 0; pointer-events: none;
+      transition: opacity 0.2s;
+    }
+    .overlay.open { opacity: 1; pointer-events: auto; }
+    .modal {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      width: 100%; max-width: 520px;
+      max-height: 90vh; overflow-y: auto;
+    }
+    .modal-head {
+      padding: 18px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex; justify-content: space-between; align-items: center;
+      font-weight: 600;
+    }
+    .modal-body { padding: 20px; }
+    .modal-foot {
+      padding: 14px 20px;
+      border-top: 1px solid var(--border);
+      display: flex; justify-content: flex-end; gap: 8px;
+    }
+    .form-group { margin-bottom: 16px; }
+    label { display: block; font-size: 12px; color: var(--text-muted); margin-bottom: 5px; }
+    input[type=text], input[type=number], input[type=password] {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 13px;
+    }
+    input[type=text]:focus, input[type=number]:focus, input[type=password]:focus {
+      outline: none; border-color: var(--accent);
+    }
+    .hint { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+    .info-box {
+      background: var(--surface2);
+      border-left: 3px solid var(--accent);
+      border-radius: 4px;
+      padding: 10px 12px;
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-bottom: 18px;
+    }
+    .toggle-wrap {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 13px; cursor: pointer;
+    }
+    input[type=checkbox] { width: 16px; height: 16px; cursor: pointer; accent-color: #6366f1; }
+
+    /* ── Provider legend ── */
+    .legend-row {
+      display: flex; flex-wrap: wrap; gap: 12px;
+      margin-top: 12px;
+    }
+    .legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-muted); }
+
+    /* ── Responsive ── */
+    @media (max-width: 640px) {
+      .stats-grid { grid-template-columns: 1fr 1fr; }
+      .main { padding: 12px; }
+      .header { padding: 0 12px; }
+      .hide-sm { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Header -->
+<header class="header">
+  <div style="display:flex;align-items:center;gap:10px">
+    <div class="logo-icon">📊</div>
+    <span class="logo">AI Token Monitor</span>
+  </div>
+  <div class="header-right">
+    <select class="time-range-select" id="time-range" onchange="onRangeChange(this.value)">
+      <option value="1d">24 ชั่วโมง</option>
+      <option value="7d" selected>7 วัน</option>
+      <option value="30d">30 วัน</option>
+    </select>
+    <button class="btn" onclick="refresh()" title="รีเฟรช">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+      </svg>
+      <span class="hide-sm">รีเฟรช</span>
+    </button>
+    <button class="btn" onclick="openSettings()">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="3"/>
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06-.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+      </svg>
+      ตั้งค่า
+    </button>
+  </div>
+</header>
+
+<!-- Demo banner -->
+<div class="demo-banner" id="demo-banner">
+  <span>⚡ <strong>DEMO MODE</strong> — แสดงข้อมูลตัวอย่าง กด "ตั้งค่า" เพื่อเชื่อมต่อ Supabase จริง</span>
+  <button class="btn" onclick="openSettings()" style="font-size:12px;padding:4px 10px;">ตั้งค่าเลย →</button>
+</div>
+
+<!-- Main -->
+<main class="main">
+
+  <!-- Alert -->
+  <div class="alert-bar" id="alert-bar">
+    ⚠️ <span id="alert-msg"></span>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-label">Tokens รวม</div>
+      <div class="stat-value" id="s-tokens">—</div>
+      <div class="stat-sub" id="s-period">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">ค่าใช้จ่าย (USD)</div>
+      <div class="stat-value" id="s-cost">—</div>
+      <div class="stat-sub" id="s-daily-avg">avg/วัน: —</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">API Calls</div>
+      <div class="stat-value" id="s-calls">—</div>
+      <div class="stat-sub" id="s-success-rate">success rate: —</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Model ที่ใช้มากสุด</div>
+      <div class="stat-value" id="s-model" style="font-size:16px;padding-top:4px">—</div>
+      <div class="stat-sub" id="s-providers">— providers</div>
+    </div>
+  </div>
+
+  <!-- Charts -->
+  <div class="charts-grid">
+    <div class="chart-card">
+      <div class="card-title">Token ตาม Provider</div>
+      <div class="chart-wrap"><canvas id="c-provider"></canvas></div>
+      <div class="legend-row" id="legend-row"></div>
+    </div>
+    <div class="chart-card">
+      <div class="card-title">การใช้งานตามเวลา</div>
+      <div class="chart-wrap"><canvas id="c-timeline"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Provider breakdown table -->
+  <div class="section">
+    <div class="section-header">
+      <span class="card-title" style="margin:0">สรุปตาม Provider</span>
+    </div>
+    <div style="overflow-x:auto">
+      <table>
+        <thead>
+          <tr>
+            <th>Provider</th>
+            <th class="tr">Calls</th>
+            <th class="tr">Tokens รวม</th>
+            <th class="tr">Input Tokens</th>
+            <th class="tr">Output Tokens</th>
+            <th class="tr">ค่าใช้จ่าย (USD)</th>
+            <th class="tr">เฉลี่ย/Call</th>
+          </tr>
+        </thead>
+        <tbody id="t-providers">
+          <tr><td colspan="7" style="text-align:center;padding:32px;color:var(--text-muted)">กำลังโหลด...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Recent calls table -->
+  <div class="section">
+    <div class="section-header">
+      <span class="card-title" style="margin:0">API Calls ล่าสุด</span>
+      <span class="muted" style="font-size:12px">50 รายการล่าสุด</span>
+    </div>
+    <div style="overflow-x:auto">
+      <table>
+        <thead>
+          <tr>
+            <th>เวลา</th>
+            <th>Provider</th>
+            <th>Model</th>
+            <th class="tr">Input</th>
+            <th class="tr">Output</th>
+            <th class="tr">Total</th>
+            <th class="tr">ค่าใช้จ่าย</th>
+            <th>สถานะ</th>
+            <th class="hide-sm">Workflow</th>
+          </tr>
+        </thead>
+        <tbody id="t-calls">
+          <tr><td colspan="9" style="text-align:center;padding:32px;color:var(--text-muted)">กำลังโหลด...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</main>
+
+<!-- Settings Modal -->
+<div class="overlay" id="overlay" onclick="if(event.target===this)closeSettings()">
+  <div class="modal">
+    <div class="modal-head">
+      <span>⚙️ ตั้งค่า AI Token Monitor</span>
+      <button class="btn" onclick="closeSettings()" style="padding:4px 8px">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="info-box">
+        เชื่อมต่อ Supabase เพื่อดูข้อมูลจริง — หรือเปิด Demo Mode เพื่อดูตัวอย่าง
+      </div>
+
+      <div class="form-group">
+        <label>Supabase URL</label>
+        <input type="text" id="cfg-url" placeholder="https://xxxx.supabase.co">
+      </div>
+      <div class="form-group">
+        <label>Supabase Anon Key</label>
+        <input type="password" id="cfg-key" placeholder="eyJhbGciOiJIUzI1NiIs...">
+      </div>
+      <div class="form-group">
+        <label>n8n Webhook URL (สำหรับ log token usage)</label>
+        <input type="text" id="cfg-webhook" placeholder="https://n8n.yourdomain.com/webhook/log-ai-usage">
+        <div class="hint">ใช้ URL นี้ใน n8n หลัง AI node เพื่อบันทึก token usage อัตโนมัติ</div>
+      </div>
+      <div class="form-group">
+        <label>Alert Threshold (USD/วัน)</label>
+        <input type="number" id="cfg-threshold" placeholder="10" min="0" step="1">
+        <div class="hint">แจ้งเตือนเมื่อค่าใช้จ่ายต่อวันเกิน threshold นี้</div>
+      </div>
+      <div class="form-group">
+        <label class="toggle-wrap">
+          <input type="checkbox" id="cfg-demo"> Demo Mode (แสดงข้อมูลตัวอย่าง)
+        </label>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" onclick="closeSettings()">ยกเลิก</button>
+      <button class="btn btn-primary" onclick="saveSettings()">💾 บันทึก</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─────────────────────────────────────────────
+// Config
+// ─────────────────────────────────────────────
+let cfg = {
+  url: '', key: '', webhook: '',
+  threshold: 10, demo: true, range: '7d'
+};
+
+const PROVIDERS = {
+  openai:    { label: 'OpenAI',        color: '#10a37f' },
+  anthropic: { label: 'Anthropic',     color: '#d4663a' },
+  google:    { label: 'Google Gemini', color: '#4285f4' },
+  groq:      { label: 'Groq',          color: '#f55036' },
+  meta:      { label: 'Meta / Llama',  color: '#0064e0' },
+  mistral:   { label: 'Mistral',       color: '#ff7722' },
+};
+
+// USD per 1K tokens { input, output }
+const PRICE = {
+  'gpt-4o':                        { i: 0.0025,   o: 0.01    },
+  'gpt-4o-mini':                   { i: 0.00015,  o: 0.0006  },
+  'gpt-4-turbo':                   { i: 0.01,     o: 0.03    },
+  'gpt-3.5-turbo':                 { i: 0.0005,   o: 0.0015  },
+  'claude-3-5-sonnet-20241022':    { i: 0.003,    o: 0.015   },
+  'claude-3-5-haiku-20241022':     { i: 0.0008,   o: 0.004   },
+  'claude-3-opus-20240229':        { i: 0.015,    o: 0.075   },
+  'claude-3-haiku-20240307':       { i: 0.00025,  o: 0.00125 },
+  'gemini-1.5-pro':                { i: 0.00125,  o: 0.005   },
+  'gemini-1.5-flash':              { i: 0.000075, o: 0.0003  },
+  'gemini-2.0-flash':              { i: 0,        o: 0       },
+  'llama-3.3-70b-versatile':       { i: 0.00059,  o: 0.00079 },
+  'llama-3.1-8b-instant':          { i: 0.00005,  o: 0.00008 },
+  'mixtral-8x7b-32768':            { i: 0.00024,  o: 0.00024 },
+};
+
+let chartProvider = null, chartTimeline = null;
+
+// ─────────────────────────────────────────────
+// Config persistence
+// ─────────────────────────────────────────────
+function loadCfg() {
+  try {
+    const s = localStorage.getItem('aitm-cfg');
+    if (s) cfg = { ...cfg, ...JSON.parse(s) };
+  } catch (_) {}
+}
+function saveCfg() {
+  localStorage.setItem('aitm-cfg', JSON.stringify(cfg));
+}
+
+// ─────────────────────────────────────────────
+// Demo data
+// ─────────────────────────────────────────────
+function demoData(days) {
+  const models = [
+    { provider: 'openai',    model: 'gpt-4o-mini',                 w: 38 },
+    { provider: 'openai',    model: 'gpt-4o',                      w: 12 },
+    { provider: 'anthropic', model: 'claude-3-5-haiku-20241022',   w: 28 },
+    { provider: 'anthropic', model: 'claude-3-5-sonnet-20241022',  w: 10 },
+    { provider: 'google',    model: 'gemini-1.5-flash',            w: 8  },
+    { provider: 'groq',      model: 'llama-3.3-70b-versatile',     w: 4  },
+  ];
+  const workflows = ['Job Start Handler','Job Close Handler','Customer Reply Bot','Auto Quote Generator'];
+  const now = Date.now();
+  const rows = [];
+
+  for (let d = 0; d < days; d++) {
+    const n = Math.floor(60 + Math.random() * 60);
+    for (let i = 0; i < n; i++) {
+      let cum = 0, r = Math.random() * 100, m = models[0];
+      for (const x of models) { cum += x.w; if (r < cum) { m = x; break; } }
+
+      const prompt = Math.floor(150 + Math.random() * 1800);
+      const compl  = Math.floor(40  + Math.random() * 900);
+      const p = PRICE[m.model] || { i: 0.001, o: 0.003 };
+      const cost = (prompt / 1000 * p.i) + (compl / 1000 * p.o);
+
+      const ts = new Date(now - d * 86400000 - Math.random() * 86400000);
+      rows.push({
+        id: `d${d}-${i}`,
+        created_at: ts.toISOString(),
+        provider: m.provider,
+        model: m.model,
+        prompt_tokens: prompt,
+        completion_tokens: compl,
+        total_tokens: prompt + compl,
+        cost_usd: cost,
+        workflow_name: workflows[Math.floor(Math.random() * workflows.length)],
+        status: Math.random() > 0.03 ? 'success' : 'error',
+      });
+    }
+  }
+  return rows.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+}
+
+// ─────────────────────────────────────────────
+// Supabase fetch
+// ─────────────────────────────────────────────
+async function fetchSupabase(days) {
+  const from = new Date(Date.now() - days * 86400000).toISOString();
+  const res = await fetch(
+    `${cfg.url}/rest/v1/ai_token_usage?created_at=gte.${from}&order=created_at.desc&limit=1000`,
+    { headers: { apikey: cfg.key, Authorization: `Bearer ${cfg.key}` } }
+  );
+  if (!res.ok) throw new Error(`Supabase ${res.status}`);
+  return res.json();
+}
+
+async function getData() {
+  const days = cfg.range === '1d' ? 1 : cfg.range === '7d' ? 7 : 30;
+  if (cfg.demo || !cfg.url || !cfg.key) return demoData(days);
+  return fetchSupabase(days);
+}
+
+// ─────────────────────────────────────────────
+// Aggregate
+// ─────────────────────────────────────────────
+function aggregate(rows) {
+  const byProvider = {};
+  const modelCount = {};
+  let totalCost = 0, totalTokens = 0, successCount = 0;
+
+  for (const r of rows) {
+    const tok   = r.total_tokens || 0;
+    const cost  = parseFloat(r.cost_usd) || 0;
+    totalTokens += tok;
+    totalCost   += cost;
+    if (r.status === 'success') successCount++;
+
+    if (!byProvider[r.provider]) {
+      byProvider[r.provider] = { calls:0, tokens:0, prompt:0, compl:0, cost:0 };
+    }
+    byProvider[r.provider].calls++;
+    byProvider[r.provider].tokens += tok;
+    byProvider[r.provider].prompt += r.prompt_tokens || 0;
+    byProvider[r.provider].compl  += r.completion_tokens || 0;
+    byProvider[r.provider].cost   += cost;
+
+    modelCount[r.model] = (modelCount[r.model] || 0) + 1;
+  }
+
+  const topModel = Object.entries(modelCount).sort((a,b) => b[1]-a[1])[0];
+  return {
+    totalTokens, totalCost,
+    totalCalls: rows.length, successCount,
+    byProvider,
+    topModel: topModel ? topModel[0] : '—',
+  };
+}
+
+// ─────────────────────────────────────────────
+// Format helpers
+// ─────────────────────────────────────────────
+function fmtN(n) {
+  if (n >= 1e6) return (n/1e6).toFixed(2)+'M';
+  if (n >= 1e3) return (n/1e3).toFixed(1)+'K';
+  return n.toLocaleString();
+}
+function fmtC(n) {
+  if (n < 0.001) return '$'+n.toFixed(6);
+  if (n < 0.01)  return '$'+n.toFixed(4);
+  return '$'+n.toFixed(3);
+}
+function ago(iso) {
+  const m = Math.floor((Date.now()-new Date(iso))/60000);
+  if (m < 1)  return 'เพิ่งเมื่อกี้';
+  if (m < 60) return m+' นาทีที่แล้ว';
+  const h = Math.floor(m/60);
+  if (h < 24) return h+' ชม.ที่แล้ว';
+  return Math.floor(h/24)+' วันที่แล้ว';
+}
+function periodLabel() {
+  return cfg.range === '1d' ? '24 ชั่วโมงล่าสุด' : cfg.range === '7d' ? '7 วันล่าสุด' : '30 วันล่าสุด';
+}
+
+// ─────────────────────────────────────────────
+// Render: stats
+// ─────────────────────────────────────────────
+function renderStats(agg, days) {
+  document.getElementById('s-tokens').textContent  = fmtN(agg.totalTokens);
+  document.getElementById('s-period').textContent  = periodLabel();
+  document.getElementById('s-cost').textContent    = fmtC(agg.totalCost);
+  document.getElementById('s-daily-avg').textContent = 'avg/วัน: '+fmtC(agg.totalCost/days);
+  document.getElementById('s-calls').textContent   = agg.totalCalls.toLocaleString();
+  const sr = agg.totalCalls ? ((agg.successCount/agg.totalCalls)*100).toFixed(1)+'%' : '—';
+  document.getElementById('s-success-rate').textContent = 'success rate: '+sr;
+  document.getElementById('s-model').textContent   = agg.topModel;
+  document.getElementById('s-providers').textContent = Object.keys(agg.byProvider).length+' providers';
+
+  // alert
+  const daily = agg.totalCost / days;
+  const bar = document.getElementById('alert-bar');
+  if (daily > cfg.threshold) {
+    document.getElementById('alert-msg').textContent =
+      `ค่าใช้จ่ายเฉลี่ย ${fmtC(daily)}/วัน เกิน threshold ${fmtC(cfg.threshold)}/วัน`;
+    bar.classList.add('show');
+  } else {
+    bar.classList.remove('show');
+  }
+}
+
+// ─────────────────────────────────────────────
+// Render: provider doughnut
+// ─────────────────────────────────────────────
+function renderProviderChart(agg) {
+  const providers = Object.keys(agg.byProvider);
+  const labels  = providers.map(p => PROVIDERS[p]?.label || p);
+  const data    = providers.map(p => agg.byProvider[p].tokens);
+  const colors  = providers.map(p => PROVIDERS[p]?.color || '#666');
+
+  if (chartProvider) chartProvider.destroy();
+  chartProvider = new Chart(document.getElementById('c-provider'), {
+    type: 'doughnut',
+    data: { labels, datasets: [{ data, backgroundColor: colors, borderWidth: 0, hoverOffset: 6 }] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: c => ` ${c.label}: ${fmtN(c.raw)} tokens` } }
+      },
+      cutout: '68%',
+    },
+  });
+
+  // custom legend
+  document.getElementById('legend-row').innerHTML = providers.map(p =>
+    `<div class="legend-item">
+      <div class="dot" style="background:${PROVIDERS[p]?.color||'#666'}"></div>
+      ${PROVIDERS[p]?.label||p}
+    </div>`
+  ).join('');
+}
+
+// ─────────────────────────────────────────────
+// Render: timeline line chart
+// ─────────────────────────────────────────────
+function renderTimeline(rows) {
+  const days    = cfg.range === '1d' ? 1 : cfg.range === '7d' ? 7 : 30;
+  const byHour  = cfg.range === '1d';
+  const providers = [...new Set(rows.map(r => r.provider))];
+  const now = new Date();
+
+  // Build time buckets
+  const buckets = {};
+  const labels  = [];
+
+  if (byHour) {
+    for (let h = 23; h >= 0; h--) {
+      const key = `${String(new Date(now-h*3600000).getHours()).padStart(2,'0')}:00`;
+      buckets[key] = {}; labels.push(key);
+      for (const p of providers) buckets[key][p] = 0;
+    }
+  } else {
+    for (let d = days-1; d >= 0; d--) {
+      const dt = new Date(now); dt.setDate(dt.getDate()-d);
+      const key = dt.toLocaleDateString('th-TH', { month:'short', day:'numeric' });
+      buckets[key] = {}; labels.push(key);
+      for (const p of providers) buckets[key][p] = 0;
+    }
+  }
+
+  for (const r of rows) {
+    const dt  = new Date(r.created_at);
+    const key = byHour
+      ? `${String(dt.getHours()).padStart(2,'0')}:00`
+      : dt.toLocaleDateString('th-TH', { month:'short', day:'numeric' });
+    if (buckets[key]) buckets[key][r.provider] = (buckets[key][r.provider]||0) + (r.total_tokens||0);
+  }
+
+  const datasets = providers.map(p => ({
+    label: PROVIDERS[p]?.label || p,
+    data: labels.map(l => buckets[l][p]||0),
+    borderColor: PROVIDERS[p]?.color || '#666',
+    backgroundColor: (PROVIDERS[p]?.color||'#666')+'22',
+    fill: true, tension: 0.4, borderWidth: 2, pointRadius: 2,
+  }));
+
+  if (chartTimeline) chartTimeline.destroy();
+  chartTimeline = new Chart(document.getElementById('c-timeline'), {
+    type: 'line',
+    data: { labels, datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { labels: { color:'#8b949e', font:{ size:11 }, boxWidth:12 } },
+        tooltip: { callbacks: { label: c => ` ${c.dataset.label}: ${fmtN(c.raw)} tokens` } },
+      },
+      scales: {
+        x: { grid:{ color:'#21262d' }, ticks:{ color:'#8b949e', font:{ size:11 } } },
+        y: {
+          grid:{ color:'#21262d' },
+          ticks:{ color:'#8b949e', font:{ size:11 }, callback: v => fmtN(v) },
+        },
+      },
+    },
+  });
+}
+
+// ─────────────────────────────────────────────
+// Render: provider table
+// ─────────────────────────────────────────────
+function renderProviderTable(agg) {
+  const tbody = document.getElementById('t-providers');
+  const rows  = Object.entries(agg.byProvider).sort((a,b) => b[1].tokens-a[1].tokens);
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:32px;color:var(--text-muted)">ไม่มีข้อมูล</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map(([p, d]) => {
+    const meta = PROVIDERS[p] || { label: p, color: '#666' };
+    return `<tr>
+      <td><div class="provider-badge"><div class="dot" style="background:${meta.color}"></div>${meta.label}</div></td>
+      <td class="tr">${d.calls.toLocaleString()}</td>
+      <td class="tr">${fmtN(d.tokens)}</td>
+      <td class="tr muted">${fmtN(d.prompt)}</td>
+      <td class="tr muted">${fmtN(d.compl)}</td>
+      <td class="tr">${fmtC(d.cost)}</td>
+      <td class="tr muted">${d.calls ? fmtN(Math.round(d.tokens/d.calls)) : '—'}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ─────────────────────────────────────────────
+// Render: recent calls table
+// ─────────────────────────────────────────────
+function renderCalls(rows) {
+  const tbody = document.getElementById('t-calls');
+  const slice = rows.slice(0, 50);
+  if (!slice.length) {
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:32px;color:var(--text-muted)">ไม่มีข้อมูล</td></tr>';
+    return;
+  }
+  tbody.innerHTML = slice.map(r => {
+    const meta = PROVIDERS[r.provider] || { label: r.provider, color: '#666' };
+    return `<tr>
+      <td class="muted" style="white-space:nowrap">${ago(r.created_at)}</td>
+      <td><div class="provider-badge"><div class="dot" style="background:${meta.color}"></div>${meta.label}</div></td>
+      <td class="mono">${r.model}</td>
+      <td class="tr">${(r.prompt_tokens||0).toLocaleString()}</td>
+      <td class="tr">${(r.completion_tokens||0).toLocaleString()}</td>
+      <td class="tr">${(r.total_tokens||0).toLocaleString()}</td>
+      <td class="tr">${fmtC(parseFloat(r.cost_usd)||0)}</td>
+      <td><span class="badge ${r.status==='success'?'badge-ok':'badge-err'}">${r.status}</span></td>
+      <td class="muted mono hide-sm" style="font-size:11px">${r.workflow_name||'—'}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ─────────────────────────────────────────────
+// Load dashboard
+// ─────────────────────────────────────────────
+async function loadDashboard() {
+  const days = cfg.range === '1d' ? 1 : cfg.range === '7d' ? 7 : 30;
+  try {
+    const rows = await getData();
+    const agg  = aggregate(rows);
+    renderStats(agg, days);
+    renderProviderChart(agg);
+    renderTimeline(rows);
+    renderProviderTable(agg);
+    renderCalls(rows);
+  } catch (err) {
+    console.error(err);
+    document.getElementById('t-calls').innerHTML =
+      `<tr><td colspan="9" style="color:var(--danger);padding:16px">${err.message}</td></tr>`;
+  }
+}
+
+// ─────────────────────────────────────────────
+// UI actions
+// ─────────────────────────────────────────────
+function onRangeChange(v) { cfg.range = v; saveCfg(); loadDashboard(); }
+function refresh() { loadDashboard(); }
+
+function openSettings() {
+  document.getElementById('cfg-url').value       = cfg.url;
+  document.getElementById('cfg-key').value       = cfg.key;
+  document.getElementById('cfg-webhook').value   = cfg.webhook;
+  document.getElementById('cfg-threshold').value = cfg.threshold;
+  document.getElementById('cfg-demo').checked    = cfg.demo;
+  document.getElementById('overlay').classList.add('open');
+}
+function closeSettings() {
+  document.getElementById('overlay').classList.remove('open');
+}
+function saveSettings() {
+  cfg.url       = document.getElementById('cfg-url').value.trim();
+  cfg.key       = document.getElementById('cfg-key').value.trim();
+  cfg.webhook   = document.getElementById('cfg-webhook').value.trim();
+  cfg.threshold = parseFloat(document.getElementById('cfg-threshold').value) || 10;
+  cfg.demo      = document.getElementById('cfg-demo').checked;
+  saveCfg(); closeSettings();
+  document.getElementById('demo-banner').classList.toggle('hidden', !cfg.demo && !!cfg.url);
+  loadDashboard();
+}
+
+// ─────────────────────────────────────────────
+// Init
+// ─────────────────────────────────────────────
+loadCfg();
+document.getElementById('time-range').value = cfg.range;
+document.getElementById('demo-banner').classList.toggle('hidden', !cfg.demo && !!cfg.url);
+loadDashboard();
+setInterval(loadDashboard, 60000);
+</script>
+</body>
+</html>
