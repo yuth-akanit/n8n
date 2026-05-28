@@ -1,0 +1,2056 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="referrer" content="origin-when-cross-origin" />
+  <title>PAA Air Service | บริการล้างแอร์</title>
+
+  <!-- Global error handler to catch script loading errors -->
+  <script>
+    // Catch and handle script loading errors before they cause syntax errors
+    window.addEventListener('error', function(e) {
+      if (e.target && e.target.tagName === 'SCRIPT') {
+        // Only log non-Thailand.js errors to reduce noise
+        const isThailandScript = e.target.src && (
+          e.target.src.includes('jquery.thailand') ||
+          e.target.src.includes('Thailand.js')
+        );
+
+        if (!isThailandScript) {
+          console.error('Script loading error:', e.target.src, e.message);
+        }
+
+        // Prevent the error from propagating if it's a script loading issue
+        if (e.message && e.message.includes("Unexpected token '<'")) {
+          if (!isThailandScript) {
+            console.warn('Detected HTML being loaded as JavaScript, removing problematic script');
+          }
+          if (e.target.parentNode) {
+            e.target.parentNode.removeChild(e.target);
+          }
+          e.preventDefault();
+          return true;
+        }
+      }
+    }, true);
+  </script>
+
+  <!-- LIFF SDK -->
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"
+          onerror="console.error('Failed to load LIFF SDK');"></script>
+
+  <!-- jQuery (must load first) - Use reliable CDN -->
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"
+          onerror="console.error('Failed to load jQuery');"></script>
+
+  <!-- Address Autocomplete - Use reliable CDN sources -->
+  <script src="https://cdn.jsdelivr.net/npm/typeahead.js@0.11.1/dist/typeahead.bundle.min.js"
+          onerror="console.warn('Typeahead.js failed to load, autocomplete may not work');"></script>
+  <script>
+    // Fix LIFF redirect URL CSS and Script loading issue
+    (function() {
+      // Intercept any attempts to load CSS or Scripts from LIFF redirect URLs
+      const originalCreateElement = document.createElement;
+      document.createElement = function(tagName) {
+        const element = originalCreateElement.call(this, tagName);
+
+        if (tagName.toLowerCase() === 'link' && element.rel === 'stylesheet') {
+          const originalSetAttribute = element.setAttribute;
+          element.setAttribute = function(name, value) {
+            if (name === 'href' && value.includes('code=') && value.includes('liffClientId=')) {
+              console.warn('Prevented loading CSS from LIFF redirect URL:', value);
+              return; // Don't set the problematic href
+            }
+            return originalSetAttribute.call(this, name, value);
+          };
+        }
+
+        if (tagName.toLowerCase() === 'script') {
+          const originalSetAttribute = element.setAttribute;
+          element.setAttribute = function(name, value) {
+            if (name === 'src' && value && (value.includes('code=') || value.includes('liffClientId='))) {
+              console.warn('Prevented loading Script from LIFF redirect URL:', value);
+              return; // Don't set the problematic src
+            }
+            return originalSetAttribute.call(this, name, value);
+          };
+        }
+
+        return element;
+      };
+
+      // Also handle any existing problematic links and scripts
+      document.addEventListener('DOMContentLoaded', function() {
+        const links = document.querySelectorAll('link[rel="stylesheet"]');
+        links.forEach(link => {
+          if (link.href && link.href.includes('code=') && link.href.includes('liffClientId=')) {
+            console.warn('Removed problematic CSS link:', link.href);
+            link.remove();
+          }
+        });
+
+        const scripts = document.querySelectorAll('script[src]');
+        scripts.forEach(script => {
+          if (script.src && (script.src.includes('code=') || script.src.includes('liffClientId='))) {
+            console.warn('Removed problematic script:', script.src);
+            script.remove();
+          }
+        });
+      });
+    })();
+
+    // Initialize Thailand.js with better error handling and fallback autocomplete
+    let thailandInitAttempted = false;
+    window.thailandInitState = {
+      inProgress: false,
+      completed: false,
+      method: null // 'library' or 'fallback'
+    };
+    window.addEventListener('load', function() {
+      if (thailandInitAttempted) return;
+      thailandInitAttempted = true;
+
+        setTimeout(function() {
+        // Wait for jQuery to be available before loading Thailand.js
+        function waitForJQuery(callback, maxAttempts = 10) {
+          if (typeof jQuery !== 'undefined') {
+            callback();
+          } else if (maxAttempts > 0) {
+            setTimeout(() => waitForJQuery(callback, maxAttempts - 1), 200);
+          } else {
+            console.warn('jQuery not available, initializing fallback autocomplete');
+            window.thailandInitState.inProgress = false;
+            initFallbackAutocomplete();
+          }
+        }
+
+        waitForJQuery(function() {
+          window.thailandInitState.inProgress = true;
+          console.log('Loading Thailand.js...');
+
+          // Try multiple sources for Thailand.js
+          const thailandSources = [
+          'https://unpkg.com/jquery.thailand@1.3.3/dist/jquery.Thailand.min.js',
+          'https://cdn.jsdelivr.net/npm/jquery.thailand@1.3.3/dist/jquery.Thailand.min.js',
+          'https://cdnjs.cloudflare.com/ajax/libs/jquery.thailand/1.3.3/jquery.Thailand.min.js',
+          'https://earthchie.github.io/jquery.Thailand.js/jquery.Thailand.js/dist/jquery.Thailand.min.js'
+        ];
+
+        let addressDatabase = null;
+        let databaseLoaded = false;
+        let databaseLoadAttempted = false;
+
+        // Load database for fallback autocomplete - use same origin to avoid CORS
+        function loadAddressDatabase() {
+          if (databaseLoaded) return Promise.resolve(addressDatabase);
+          if (databaseLoadAttempted) return Promise.resolve(addressDatabase);
+          databaseLoadAttempted = true;
+
+          // Try same origin first, then CORS proxy as fallback
+          const dbUrl = window.location.origin.includes('customer.paaair.online')
+            ? 'https://customer.paaair.online/assets/db.json'
+            : 'https://paaair.online/customer-app/assets/db.json';
+
+          return fetch(dbUrl, { mode: 'cors' })
+            .then(response => {
+              if (!response.ok) throw new Error('Database not accessible');
+              return response.json();
+            })
+            .then(data => {
+              addressDatabase = data;
+              databaseLoaded = true;
+              console.log('Address database loaded for fallback autocomplete');
+              return addressDatabase;
+            })
+            .catch(error => {
+              console.warn('Failed to load address database (CORS issue):', error.message);
+              // Try using JSONP or script tag method as last resort
+              return loadDatabaseViaScript();
+            });
+        }
+
+        // Alternative: Load database via script tag (no CORS)
+        function loadDatabaseViaScript() {
+          return new Promise((resolve) => {
+            // Since we can't easily use JSONP without server support, just return null
+            // The autocomplete will work in manual mode
+            console.log('Database unavailable, using manual input mode');
+            resolve(null);
+          });
+        }
+
+        // Fallback autocomplete using database directly
+        function initFallbackAutocomplete() {
+          window.thailandInitState.completed = true;
+          window.thailandInitState.method = 'fallback';
+          // Enable fields immediately
+          document.querySelectorAll('#subdistrict, #district, #province, #postcode').forEach(field => {
+            field.disabled = false;
+          });
+
+          loadAddressDatabase().then(db => {
+            if (!db) {
+              console.log('Address autocomplete: Manual input mode (database unavailable)');
+              return;
+            }
+
+            const subdistrictField = document.getElementById('subdistrict');
+            const districtField = document.getElementById('district');
+            const provinceField = document.getElementById('province');
+            const postcodeField = document.getElementById('postcode');
+
+            if (!subdistrictField) return;
+
+            let suggestionsDiv = null;
+            let currentSuggestions = [];
+
+            function createSuggestionsDiv() {
+              if (suggestionsDiv) return suggestionsDiv;
+              suggestionsDiv = document.createElement('div');
+              suggestionsDiv.className = 'tt-menu';
+              suggestionsDiv.style.cssText = 'position: absolute; background: #fff; border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 4px 12px rgba(0,0,0,.1); max-height: 200px; overflow-y: auto; width: 100%; margin-top: 4px; z-index: 1000; display: none;';
+              subdistrictField.parentElement.style.position = 'relative';
+              subdistrictField.parentElement.appendChild(suggestionsDiv);
+              return suggestionsDiv;
+            }
+
+            function showSuggestions(suggestions) {
+              const div = createSuggestionsDiv();
+              currentSuggestions = suggestions.slice(0, 10);
+
+              if (currentSuggestions.length === 0) {
+                div.style.display = 'none';
+                return;
+              }
+
+              div.innerHTML = currentSuggestions.map((item, idx) => {
+                const districtName = item.district || item.district_name || '';
+                const amphoeName = item.amphoe || item.amphoe_name || '';
+                const provinceName = item.province || item.province_name || '';
+                const displayText = `${districtName}${amphoeName ? ', ' + amphoeName : ''}${provinceName ? ', ' + provinceName : ''}`;
+                return `<div class="tt-suggestion" data-index="${idx}" style="padding: 10px 12px; border-bottom: 1px solid #f1f5f9; cursor: pointer; font-size: 13px; transition: background-color 0.15s;">${displayText}</div>`;
+              }).join('');
+
+              div.style.display = 'block';
+
+              // Add click handlers
+              div.querySelectorAll('.tt-suggestion').forEach((el, idx) => {
+                el.addEventListener('click', function() {
+                  const item = currentSuggestions[idx];
+                  subdistrictField.value = item.district || item.district_name || '';
+                  districtField.value = item.amphoe || item.amphoe_name || '';
+                  provinceField.value = item.province || item.province_name || '';
+                  postcodeField.value = item.zipcode || item.postcode || '';
+                  div.style.display = 'none';
+                });
+
+                el.addEventListener('mouseenter', function() {
+                  this.style.background = '#f0fdf4';
+                  this.style.color = 'var(--primary)';
+                });
+
+                el.addEventListener('mouseleave', function() {
+                  this.style.background = '';
+                  this.style.color = '';
+                });
+              });
+            }
+
+            subdistrictField.addEventListener('input', function() {
+              const query = this.value.trim().toLowerCase();
+
+              if (query.length < 2) {
+                createSuggestionsDiv().style.display = 'none';
+                return;
+              }
+
+              if (!addressDatabase) {
+                return;
+              }
+
+              // Try different possible database structures
+              let dataArray = null;
+              if (addressDatabase.district) {
+                dataArray = addressDatabase.district;
+              } else if (addressDatabase.data && Array.isArray(addressDatabase.data)) {
+                dataArray = addressDatabase.data;
+              } else if (Array.isArray(addressDatabase)) {
+                dataArray = addressDatabase;
+              }
+
+              if (!dataArray || !Array.isArray(dataArray)) {
+                return;
+              }
+
+              const matches = dataArray
+                .filter(item => {
+                  const district = (item.district || item.district_name || '').toLowerCase();
+                  return district.includes(query);
+                })
+                .slice(0, 10);
+
+              showSuggestions(matches);
+            });
+
+            // Hide suggestions when clicking outside
+            document.addEventListener('click', function(e) {
+              if (!subdistrictField.contains(e.target) && (!suggestionsDiv || !suggestionsDiv.contains(e.target))) {
+                if (suggestionsDiv) suggestionsDiv.style.display = 'none';
+              }
+            });
+
+            // Enable all fields
+            document.querySelectorAll('#subdistrict, #district, #province, #postcode').forEach(field => {
+              field.disabled = false;
+            });
+
+            console.log('Fallback autocomplete initialized');
+          });
+        }
+
+        let scriptLoading = false;
+        function loadThailandScript(index) {
+          // #region agent log
+          fetch('http://127.0.0.1:7243/ingest/0e7a8555-6d73-4f12-945a-09ca4c04f641',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'index_LIFF_v13.html:299',message:'loadThailandScript called',data:{index:index,totalSources:thailandSources.length,scriptLoading:scriptLoading,source:thailandSources[index],jQueryAvailable:typeof jQuery!=='undefined'},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'F'})}).catch(()=>{});
+          // #endregion
+          if (scriptLoading && index > 0) return; // Prevent duplicate loads
+          if (index >= thailandSources.length) {
+            // #region agent log
+            fetch('http://127.0.0.1:7243/ingest/0e7a8555-6d73-4f12-945a-09ca4c04f641',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'index_LIFF_v13.html:315',message:'All sources exhausted',data:{jQueryAvailable:typeof jQuery!=='undefined'},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'F'})}).catch(()=>{});
+            // #endregion
+            console.warn('All Thailand.js sources failed, initializing fallback autocomplete');
+            window.thailandInitState.inProgress = false;
+            initFallbackAutocomplete();
+            return;
+          }
+
+          scriptLoading = true;
+          const script = document.createElement('script');
+          script.src = thailandSources[index];
+          script.type = 'text/javascript';
+          script.charset = 'utf-8';
+
+          // Single error handler - use onerror only (not addEventListener)
+          script.onerror = function() {
+            scriptLoading = false;
+            // #region agent log
+            fetch('http://127.0.0.1:7243/ingest/0e7a8555-6d73-4f12-945a-09ca4c04f641',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'index_LIFF_v13.html:327',message:'Script onerror fired',data:{index:index,source:thailandSources[index],isLast:index===thailandSources.length-1},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'F'})}).catch(()=>{});
+            // #endregion
+            // Only log on last attempt to reduce console noise
+            if (index === thailandSources.length - 1) {
+              console.warn('All Thailand.js CDN sources failed, using fallback');
+            }
+            // Remove the script if it was added
+            if (script.parentNode) {
+              script.parentNode.removeChild(script);
+            }
+            // Try next source
+            setTimeout(() => loadThailandScript(index + 1), 100);
+          };
+
+          script.onload = function() {
+            // #region agent log
+            fetch('http://127.0.0.1:7243/ingest/0e7a8555-6d73-4f12-945a-09ca4c04f641',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'index_LIFF_v13.html:345',message:'Script onload fired',data:{index:index,source:thailandSources[index],jQueryAvailable:typeof jQuery!=='undefined',jQueryThailandAvailable:typeof jQuery!=='undefined'&&typeof jQuery.Thailand!=='undefined'},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'F'})}).catch(()=>{});
+            // #endregion
+            // Verify the script actually loaded JavaScript, not HTML
+            // Check multiple times with increasing delays in case jQuery isn't ready yet
+            let checkAttempts = 0;
+            const maxAttempts = 3;
+
+            function checkThailand() {
+              checkAttempts++;
+              // #region agent log
+              fetch('http://127.0.0.1:7243/ingest/0e7a8555-6d73-4f12-945a-09ca4c04f641',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'index_LIFF_v13.html:353',message:'Checking jQuery.Thailand',data:{index:index,attempt:checkAttempts,maxAttempts:maxAttempts,jQueryAvailable:typeof jQuery!=='undefined',jQueryThailandAvailable:typeof jQuery!=='undefined'&&typeof jQuery.Thailand!=='undefined'},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'F'})}).catch(()=>{});
+              // #endregion
+
+              if (typeof jQuery !== 'undefined' && jQuery.Thailand) {
+                scriptLoading = false; // Only set to false when we're done
+                try {
+                  // Use same origin database URL to avoid CORS
+                  const dbUrl = window.location.origin.includes('customer.paaair.online')
+                    ? 'https://customer.paaair.online/assets/db.json'
+                    : 'https://paaair.online/customer-app/assets/db.json';
+
+                  jQuery.Thailand({
+                    database: dbUrl,
+                    $district: jQuery('#subdistrict'),
+                    $amphoe: jQuery('#district'),
+                    $province: jQuery('#province'),
+                    $zipcode: jQuery('#postcode')
+                  });
+                  window.thailandInitState.completed = true;
+                  window.thailandInitState.method = 'library';
+                  window.thailandInitState.inProgress = false;
+                  console.log("Thai address autocomplete initialized successfully");
+                } catch (e) {
+                  console.error('Thailand initialization error:', e);
+                  scriptLoading = false;
+                  // Remove failed script
+                  if (script.parentNode) {
+                    script.parentNode.removeChild(script);
+                  }
+                  loadThailandScript(index + 1);
+                }
+              } else if (checkAttempts < maxAttempts) {
+                // jQuery.Thailand not available yet, but jQuery might not be ready
+                // Try again with longer delay
+                setTimeout(checkThailand, 500 * checkAttempts);
+              } else {
+                // #region agent log
+                fetch('http://127.0.0.1:7243/ingest/0e7a8555-6d73-4f12-945a-09ca4c04f641',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'index_LIFF_v13.html:375',message:'jQuery.Thailand not available after all attempts',data:{index:index,jQueryAvailable:typeof jQuery!=='undefined',jQueryType:typeof jQuery,scriptSrc:script.src,attempts:checkAttempts},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'F'})}).catch(()=>{});
+                // #endregion
+                scriptLoading = false;
+                console.warn('jQuery.Thailand not available, trying next source...');
+                // Remove failed script
+                if (script.parentNode) {
+                  script.parentNode.removeChild(script);
+                }
+                loadThailandScript(index + 1);
+              }
+            }
+
+            // Start checking after initial delay
+            setTimeout(checkThailand, 500);
+          };
+
+          document.head.appendChild(script);
+        }
+
+          loadThailandScript(0);
+        });
+      }, 1000);
+    });
+  </script>
+  <link rel="stylesheet" href="https://earthchie.github.io/jquery.Thailand.js/jquery.Thailand.js/dist/jquery.Thailand.min.css"
+        onerror="console.error('CSS failed, using inline styles');"
+        onload="console.log('CSS loaded successfully');" />
+
+  <!-- Prevent LIFF from parsing redirect URL -->
+  <meta name="referrer" content="origin-when-cross-origin" />
+
+  <style>
+    :root {
+      --primary: #00B900;
+      --primary-dark: #0a8f2f;
+      --bg: #f5f5f5;
+      --card-bg: #fff;
+      --text: #1a1a1a;
+      --text-muted: #64748b;
+      --border: #e2e8f0;
+      --shadow: 0 2px 8px rgba(0,0,0,.08);
+      --radius: 16px;
+    }
+
+    /* Fallback styles for autocomplete */
+    .tt-menu {
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      box-shadow: 0 4px 12px rgba(0,0,0,.1);
+      max-height: 200px;
+      overflow-y: auto;
+      width: 100%;
+      margin-top: 4px;
+      z-index: 1000;
+    }
+    .tt-suggestion {
+      padding: 10px 12px;
+      border-bottom: 1px solid #f1f5f9;
+      cursor: pointer;
+      font-size: 13px;
+      transition: background-color 0.15s;
+    }
+    .tt-suggestion:hover { background: #f0fdf4; color: var(--primary); }
+    .tt-suggestion.tt-cursor { background: #dcfce7; color: var(--primary-dark); }
+    .tt-suggestion:last-child { border-bottom: none; }
+    * { box-sizing: border-box; }
+    body {
+      font-family: "Sarabun", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      margin: 0;
+      padding: 0;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 480px;
+      margin: 0 auto;
+      padding: 16px 16px calc(16px + env(safe-area-inset-bottom));
+    }
+
+    /* Hero */
+    .hero {
+      background: linear-gradient(135deg, #00B900 0%, #0a8f2f 100%);
+      border-radius: var(--radius);
+      padding: 20px;
+      color: #fff;
+      text-align: center;
+      margin-bottom: 16px;
+      box-shadow: var(--shadow);
+    }
+    .hero-logo {
+      width: 100px;
+      height: auto;
+      margin-bottom: 8px;
+      border-radius: 10px;
+      background: #fff;
+      padding: 6px;
+    }
+    .hero h1 { margin: 0 0 4px; font-size: 20px; font-weight: 800; }
+    .hero .tagline { font-size: 12px; opacity: 0.9; margin: 0; }
+
+    /* Profile Card */
+    .profile-card {
+      background: var(--card-bg);
+      border-radius: var(--radius);
+      padding: 10px 12px;
+      display: grid;
+      grid-template-columns: 40px 1fr auto;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 16px;
+      box-shadow: var(--shadow);
+    }
+    .profile-card .avatar {
+      width: 40px; height: 40px;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 2px solid var(--primary);
+    }
+    .profile-card .info { min-width: 0; overflow: hidden; }
+    .profile-card .name {
+      font-weight: 700; font-size: 13px; margin: 0;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .profile-card .uid {
+      font-size: 9px; color: var(--text-muted);
+      font-family: monospace;
+    }
+    .profile-card .logout-btn {
+      padding: 6px 10px;
+      border-radius: 8px;
+      border: 1px solid #fca5a5;
+      background: #fef2f2;
+      color: #dc2626;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    /* Status Bar */
+    .status-bar {
+      background: var(--primary);
+      color: #fff;
+      padding: 8px 12px;
+      border-radius: 10px;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 16px;
+    }
+    .status-bar.warning { background: #f59e0b; }
+    .status-bar.error { background: #ef4444; }
+
+    /* Menu Grid */
+    .menu-section-title {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-weight: 700;
+      margin: 0 0 8px 4px;
+      text-transform: uppercase;
+    }
+    .menu-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+    .menu-card {
+      background: var(--card-bg);
+      border-radius: 12px;
+      padding: 14px 8px;
+      text-align: center;
+      cursor: pointer;
+      transition: all .15s;
+      box-shadow: var(--shadow);
+      border: 2px solid transparent;
+    }
+    .menu-card:active { transform: scale(0.96); }
+    .menu-card.primary {
+      border-color: var(--primary);
+      background: linear-gradient(180deg, #f0fff0 0%, #fff 100%);
+    }
+    .menu-card .icon { font-size: 26px; }
+    .menu-card .label { font-size: 11px; font-weight: 600; margin-top: 4px; color: var(--text); }
+    .menu-card.primary .label { color: var(--primary-dark); }
+
+    /* Quick Actions */
+    .quick-actions { display: flex; gap: 10px; margin-bottom: 16px; }
+    .quick-btn {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 12px 10px;
+      border-radius: 10px;
+      border: none;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      text-decoration: none;
+    }
+    .quick-btn.call { background: #0f172a; color: #fff; }
+    .quick-btn.line { background: var(--primary); color: #fff; }
+
+    /* Trust */
+    .trust-card {
+      background: #f8fafc;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px;
+      text-align: center;
+    }
+    .trust-card p { margin: 0; font-size: 11px; color: var(--text-muted); line-height: 1.5; }
+    .trust-card .mono { font-family: monospace; }
+
+    /* Pages */
+    .page { display: none; }
+    .page.active { display: block; }
+
+    /* Page Header */
+    .page-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    .back-btn {
+      width: 40px; height: 40px;
+      border-radius: 10px;
+      border: 2px solid var(--primary);
+      background: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 22px;
+      font-weight: 900;
+      color: var(--primary);
+    }
+    .back-btn:active { background: var(--primary); color: #fff; }
+    .page-title { margin: 0; font-size: 17px; font-weight: 800; color: var(--primary-dark); }
+
+    /* Card */
+    .card {
+      background: var(--card-bg);
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 12px;
+      box-shadow: var(--shadow);
+      border: 1px solid var(--border);
+    }
+    .card-title { font-weight: 700; margin-bottom: 12px; font-size: 14px; }
+
+    /* Form */
+    .row { display: flex; gap: 10px; flex-wrap: wrap; }
+    .row + .row { margin-top: 10px; }
+    .col2 { flex: 1; min-width: 0; }
+
+    label { font-size: 12px; color: var(--text-muted); display: block; margin-bottom: 4px; font-weight: 600; }
+
+    input, select, textarea {
+      padding: 12px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      font-size: 15px;
+      width: 100%;
+      background: #fff;
+    }
+    textarea { min-height: 60px; resize: vertical; }
+    input:focus, select:focus, textarea:focus {
+      outline: none;
+      border-color: var(--primary);
+    }
+
+    button {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 14px;
+      border-radius: 10px;
+      border: none;
+      background: var(--primary);
+      color: #fff;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      width: 100%;
+    }
+    button:disabled { background: #94a3b8; cursor: not-allowed; }
+    .btn-secondary { background: #f1f5f9 !important; color: #475569 !important; border: 1px solid var(--border) !important; }
+    .btn-danger { background: #ef4444 !important; }
+    .btn-dark { background: #0f172a !important; }
+
+    /* Output */
+    .output {
+      margin-top: 12px;
+      padding: 12px;
+      border-radius: 10px;
+      font-size: 13px;
+      display: none;
+    }
+    .output.show { display: block; }
+    .output.loading { background: #fef3c7; color: #92400e; }
+    .output.success { background: #dcfce7; color: #166534; }
+    .output.error { background: #fee2e2; color: #991b1b; }
+    .output.info { background: #e0f2fe; color: #0369a1; }
+    .output.plain { background: transparent; color: inherit; padding: 0; }
+
+    /* Slot Grid - Clean Design */
+    .slot-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-top: 12px;
+    }
+    .slot-btn {
+      padding: 10px 6px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: #fff;
+      cursor: pointer;
+      text-align: center;
+      transition: all .15s;
+    }
+    .slot-btn .time { font-size: 15px; font-weight: 700; display: block; }
+    .slot-btn .status { font-size: 10px; margin-top: 2px; }
+    .slot-btn.available { border-color: var(--primary); background: #f0fdf4; }
+    .slot-btn.available .status { color: var(--primary); }
+    .slot-btn.available:active { background: var(--primary); color: #fff; }
+    .slot-btn.available:active .status { color: #fff; }
+    .slot-btn.taken { background: #f8fafc; color: #94a3b8; cursor: not-allowed; }
+    .slot-btn.taken .status { color: #ef4444; }
+
+    /* Job Tags */
+    .job-tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+    .job-tag {
+      padding: 6px 10px;
+      border-radius: 20px;
+      background: #f1f5f9;
+      color: #334155;
+      font-size: 11px;
+      border: 1px solid var(--border);
+      cursor: pointer;
+    }
+    .job-tag.selected { background: var(--primary); color: #fff; border-color: var(--primary); }
+
+    /* Job Card - Clean Design */
+    .job-card {
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      border: 1px solid var(--border);
+    }
+    .job-header {
+      background: var(--primary);
+      color: white;
+      padding: 14px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+    }
+    .job-title { font-size: 11px; font-weight: 500; opacity: 0.9; }
+    .job-id { font-size: 20px; font-weight: 800; font-family: monospace; margin-top: 2px; }
+    .job-status {
+      background: rgba(255,255,255,0.2);
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .section-box {
+      padding: 14px 16px;
+      border-bottom: 1px solid #f1f5f9;
+    }
+    .sec-title {
+      font-size: 10px;
+      color: #94a3b8;
+      font-weight: 700;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+    .info-row {
+      display: flex;
+      gap: 8px;
+      align-items: flex-start;
+      margin-bottom: 8px;
+    }
+    .info-row:last-child { margin-bottom: 0; }
+    .info-icon { color: var(--text-muted); font-size: 16px; }
+    .info-text { font-size: 14px; color: #1e293b; font-weight: 600; line-height: 1.4; }
+    .info-sub { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+
+    .info-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .info-box {
+      background: #f8fafc;
+      border-radius: 10px;
+      padding: 12px;
+      border: 1px solid #f1f5f9;
+    }
+    .info-box .label { font-size: 10px; color: var(--text-muted); margin-bottom: 4px; }
+    .info-box .value { font-size: 14px; font-weight: 700; color: var(--text); }
+
+    .svc-list { padding: 14px 16px; }
+    .svc-item {
+      padding: 10px 0;
+      border-bottom: 1px dashed var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .svc-item:last-child { border-bottom: none; }
+    .svc-name { font-size: 14px; font-weight: 700; color: #334155; }
+    .svc-detail { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+    .svc-qty {
+      background: #f1f5f9;
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .action-bar {
+      padding: 14px 16px;
+      background: #f8fafc;
+      display: flex;
+      gap: 8px;
+    }
+    .action-bar button, .action-bar a {
+      flex: 1;
+      padding: 10px;
+      font-size: 12px;
+      text-decoration: none;
+      text-align: center;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+    }
+
+    /* History Item */
+    .history-item {
+      padding: 14px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      margin-bottom: 10px;
+      background: #fff;
+    }
+    .history-item .top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .history-item .job-num {
+      font-weight: 700;
+      font-family: monospace;
+      font-size: 14px;
+      color: var(--primary-dark);
+    }
+    .history-item .details {
+      font-size: 12px;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+
+    .pill {
+      display: inline-flex;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .pill.success { background: #dcfce7; color: #166534; }
+    .pill.warn { background: #fef3c7; color: #92400e; }
+    .pill.info { background: #e0f2fe; color: #0369a1; }
+    .pill.danger { background: #fee2e2; color: #991b1b; }
+
+    .muted { color: var(--text-muted); font-size: 12px; }
+    .mono { font-family: monospace; }
+    .hidden { display: none !important; }
+    .divider { height: 1px; background: var(--border); margin: 14px 0; }
+
+    .checkline {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .checkline input { width: 18px; height: 18px; }
+
+    /* Modal */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.5);
+      display: none;
+      align-items: flex-end;
+      justify-content: center;
+      padding: 12px;
+      z-index: 999;
+    }
+    .modal-overlay.show { display: flex; }
+    .modal {
+      width: 100%;
+      max-width: 480px;
+      background: #fff;
+      border-radius: 16px;
+      overflow: hidden;
+    }
+    .modal-head {
+      background: #0f172a;
+      color: #fff;
+      padding: 14px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-weight: 700;
+    }
+    .modal-head button { width: auto; padding: 8px 12px; background: rgba(255,255,255,.15); }
+    .modal-body { padding: 16px; max-height: 60vh; overflow: auto; }
+
+    /* Price Table */
+    .price-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+    .price-table th, .price-table td {
+      padding: 10px 8px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+    .price-table th { background: #f8fafc; font-weight: 600; }
+    .price-table .price { text-align: right; font-weight: 700; color: var(--primary-dark); }
+
+    /* Address Autocomplete */
+    .tt-menu {
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      box-shadow: 0 4px 12px rgba(0,0,0,.1);
+      max-height: 200px;
+      overflow-y: auto;
+      width: 100%;
+      margin-top: 4px;
+      z-index: 1000;
+    }
+    .tt-suggestion {
+      padding: 10px 12px;
+      border-bottom: 1px solid #f1f5f9;
+      cursor: pointer;
+      font-size: 13px;
+      transition: background-color 0.15s;
+    }
+    .tt-suggestion:hover { background: #f0fdf4; color: var(--primary); }
+    .tt-suggestion.tt-cursor { background: #dcfce7; color: var(--primary-dark); }
+    .tt-suggestion:last-child { border-bottom: none; }
+
+    /* Address field styling */
+    .address-field {
+      position: relative;
+    }
+    .address-field.loading::after {
+      content: "🔄";
+      position: absolute;
+      right: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+      from { transform: translateY(-50%) rotate(0deg); }
+      to { transform: translateY(-50%) rotate(360deg); }
+    }
+    .address-field.valid input {
+      border-color: #22c55e;
+      background: #f0fdf4;
+    }
+    .address-field.invalid input {
+      border-color: #ef4444;
+      background: #fef2f2;
+    }
+    .field-hint {
+      font-size: 10px;
+      color: var(--text-muted);
+      margin-top: 2px;
+      display: none;
+    }
+    .address-field:focus-within .field-hint {
+      display: block;
+    }
+
+    details.raw {
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px dashed var(--border);
+    }
+    details.raw > summary {
+      cursor: pointer;
+      color: #0369a1;
+      font-size: 11px;
+    }
+    pre.rawjson {
+      margin-top: 8px;
+      background: #f8fafc;
+      padding: 10px;
+      border-radius: 8px;
+      overflow: auto;
+      font-size: 10px;
+      max-height: 150px;
+    }
+  </style>
+</head>
+
+<body>
+  <!-- ==================== LANDING PAGE ==================== -->
+  <div id="landingPage" class="page active">
+    <div class="container">
+      <div id="statusBar" class="status-bar">
+        <span>🔄</span>
+        <span id="statusText">กำลังเริ่มระบบ...</span>
+      </div>
+
+      <div class="hero">
+        <img src="/assets/logo_paa.png" alt="PAA" class="hero-logo"
+             onerror="this.style.display='none';" />
+        <h1>PAA Air Service</h1>
+        <p class="tagline">บริการล้างแอร์ ซ่อมแอร์ ครบวงจร</p>
+      </div>
+
+      <div id="profileCard" class="profile-card hidden">
+        <img id="profilePic" class="avatar" src="" alt="" />
+        <div class="info">
+          <p id="profileName" class="name">-</p>
+          <p id="profileUid" class="uid">-</p>
+        </div>
+        <button id="btnLogout" class="logout-btn">ออก</button>
+      </div>
+
+      <div class="quick-actions">
+        <a href="tel:0842824465" class="quick-btn call">📞 โทรหาเรา</a>
+        <a href="https://line.me/R/ti/p/@paaair" class="quick-btn line">💬 แชท LINE</a>
+      </div>
+
+      <div class="menu-section-title">บริการ</div>
+      <div class="menu-grid">
+        <div class="menu-card primary" onclick="showPage('checkSlots')">
+          <span class="icon">📅</span>
+          <span class="label">เช็คคิวว่าง</span>
+        </div>
+        <div class="menu-card primary" onclick="showPage('booking')">
+          <span class="icon">✅</span>
+          <span class="label">จองคิว</span>
+        </div>
+        <div class="menu-card" onclick="showPage('myBooking')">
+          <span class="icon">📋</span>
+          <span class="label">คิวของฉัน</span>
+        </div>
+      </div>
+
+      <div class="menu-section-title">ข้อมูล</div>
+      <div class="menu-grid">
+        <div class="menu-card" onclick="showPage('history')">
+          <span class="icon">🕐</span>
+          <span class="label">ประวัติ</span>
+        </div>
+        <div class="menu-card" onclick="showPage('pricing')">
+          <span class="icon">💰</span>
+          <span class="label">ราคา</span>
+        </div>
+        <div class="menu-card" onclick="showPage('contact')">
+          <span class="icon">📍</span>
+          <span class="label">ติดต่อเรา</span>
+        </div>
+      </div>
+
+      <div class="trust-card">
+        <p><strong>หจก. พีเอเอ แอร์ เซอร์วิส</strong><br>
+        เลขทะเบียน: <span class="mono">0113562004205</span></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== CHECK SLOTS ==================== -->
+  <div id="checkSlotsPage" class="page">
+    <div class="container">
+      <div class="page-header">
+        <button class="back-btn" onclick="showPage('landing')">‹</button>
+        <h2 class="page-title">📅 เช็คคิวว่าง</h2>
+      </div>
+
+      <div class="card">
+        <div class="row">
+          <div class="col2">
+            <label for="qDate">วันที่</label>
+            <input id="qDate" type="date" />
+          </div>
+          <div class="col2">
+            <label for="qArea">พื้นที่</label>
+            <select id="qArea">
+              <option value="all">รวมทุกพื้นที่</option>
+              <option value="บางพลี">บางพลี</option>
+              <option value="บางนา">บางนา</option>
+              <option value="บางโฉลง">บางโฉลง</option>
+              <option value="สำโรง">สำโรง</option>
+              <option value="เทพารักษ์">เทพารักษ์</option>
+              <option value="แพรกษา">แพรกษา</option>
+              <option value="ศรีนครินทร์">ศรีนครินทร์</option>
+              <option value="พระประแดง">พระประแดง</option>
+              <option value="ปากน้ำ">ปากน้ำ</option>
+              <option value="ลาดกระบัง">ลาดกระบัง</option>
+            </select>
+          </div>
+        </div>
+        <div class="row" style="margin-top:12px">
+          <button id="btnSlots" type="button">🔍 เช็คเวลาว่าง</button>
+        </div>
+        <div id="slotsOut" class="output"></div>
+        <div id="slotGrid" class="slot-grid hidden"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== BOOKING ==================== -->
+  <div id="bookingPage" class="page">
+    <div class="container">
+      <div class="page-header">
+        <button class="back-btn" onclick="showPage('landing')">‹</button>
+        <h2 class="page-title">✅ จองคิว</h2>
+      </div>
+
+      <div class="card">
+        <div class="row">
+          <div class="col2">
+            <label for="phone">เบอร์ลูกค้า *</label>
+            <input id="phone" type="tel" placeholder="08xxxxxxxx" autocomplete="tel" />
+          </div>
+          <div class="col2">
+            <label for="name">ชื่อลูกค้า *</label>
+            <input id="name" type="text" placeholder="ชื่อ" autocomplete="name" />
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="col2">
+            <label for="bDate">วันที่ *</label>
+            <input id="bDate" type="date" />
+          </div>
+          <div class="col2">
+            <label for="bTime">เวลา *</label>
+            <input id="bTime" type="time" value="09:00" />
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="col2">
+            <label for="area">พื้นที่ *</label>
+            <select id="area">
+              <option value="">เลือกพื้นที่</option>
+              <option value="บางพลี">บางพลี</option>
+              <option value="บางนา">บางนา</option>
+              <option value="บางโฉลง">บางโฉลง</option>
+              <option value="สำโรง">สำโรง</option>
+              <option value="เทพารักษ์">เทพารักษ์</option>
+              <option value="แพรกษา">แพรกษา</option>
+              <option value="ศรีนครินทร์">ศรีนครินทร์</option>
+              <option value="พระประแดง">พระประแดง</option>
+              <option value="ปากน้ำ">ปากน้ำ</option>
+              <option value="ลาดกระบัง">ลาดกระบัง</option>
+              <option value="อื่นๆ">อื่นๆ</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="col2">
+            <label for="job_type">ประเภทงาน</label>
+            <select id="job_type">
+              <option value="ล้างแอร์">ล้างแอร์</option>
+              <option value="ซ่อมแอร์">ซ่อมแอร์</option>
+              <option value="ติดตั้งแอร์">ติดตั้งแอร์</option>
+              <option value="ตรวจเช็ค">ตรวจเช็ค/เติมน้ำยา</option>
+            </select>
+          </div>
+        </div>
+
+        <div id="jobTags" class="job-tags"></div>
+
+        <div class="divider"></div>
+
+        <div class="row">
+          <div class="col2">
+            <label for="addr_line">ที่อยู่ (เลขที่/หมู่บ้าน/ซอย) *</label>
+            <input id="addr_line" type="text" placeholder="เช่น 88/88 หมู่บ้าน PAA" />
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="col2">
+            <label for="subdistrict">ตำบล/แขวง * <span class="muted">(พิมพ์แล้วเลือก)</span></label>
+            <div class="address-field" id="subdistrict-field">
+            <input id="subdistrict" type="text" placeholder="พิมพ์ชื่อตำบล..." autocomplete="off" />
+              <div class="field-hint">พิมพ์ชื่อตำบลหรือแขวง เช่น บางพลี</div>
+            </div>
+          </div>
+          <div class="col2">
+            <label for="district">อำเภอ/เขต *</label>
+            <div class="address-field" id="district-field">
+            <input id="district" type="text" placeholder="อำเภอ..." />
+              <div class="field-hint">จะกรอกอัตโนมัติเมื่อเลือกตำบล</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="col2">
+            <label for="province">จังหวัด *</label>
+            <div class="address-field" id="province-field">
+            <input id="province" type="text" placeholder="จังหวัด..." />
+              <div class="field-hint">จะกรอกอัตโนมัติเมื่อเลือกตำบล</div>
+            </div>
+          </div>
+          <div class="col2">
+            <label for="postcode">รหัสไปรษณีย์ *</label>
+            <div class="address-field" id="postcode-field">
+              <input id="postcode" type="text" placeholder="10xxx" maxlength="5" />
+              <div class="field-hint">จะกรอกอัตโนมัติเมื่อเลือกตำบล</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="row">
+          <div class="col2">
+            <label>บริการ</label>
+            <input id="service_type" type="hidden" value="แอร์ติดผนัง (Wall Type)" readonly />
+            <div style="background:#f0fdf4; padding:10px; border-radius:8px; font-size:13px; font-weight:600; color:var(--primary-dark);">
+              แอร์ติดผนัง (Wall Type)
+            </div>
+          </div>
+          <div class="col2">
+            <label for="qty">จำนวน *</label>
+            <input id="qty" type="number" value="1" min="1" max="20" />
+          </div>
+        </div>
+
+        <div class="row">
+          <label for="other_services">งานอื่นๆ / รายละเอียดเพิ่มเติม</label>
+          <textarea id="other_services" rows="2" placeholder="เช่น ล้างแอร์ 2 เครื่อง + เติมน้ำยา"></textarea>
+        </div>
+
+        <div class="row">
+          <label for="note">หมายเหตุ</label>
+          <textarea id="note" rows="2" placeholder="เช่น โทรก่อนถึง / จอดรถตรงไหน"></textarea>
+        </div>
+
+        <div class="row">
+          <label class="checkline">
+            <input id="needTax" type="checkbox" />
+            ขอใบกำกับภาษี (Tax Invoice)
+          </label>
+        </div>
+
+        <div id="taxFields" class="hidden" style="margin-top:10px; padding:12px; background:#f8fafc; border-radius:8px;">
+          <div class="row">
+            <div class="col2">
+              <label for="tax_id">เลขผู้เสียภาษี (13 หลัก)</label>
+              <input id="tax_id" type="text" placeholder="0xxxxxxxxxxxx" />
+            </div>
+            <div class="col2">
+              <label for="tax_name">ชื่อบริษัท/ชื่อ-สกุล</label>
+              <input id="tax_name" type="text" placeholder="ชื่อเต็ม" />
+            </div>
+          </div>
+        </div>
+
+        <div class="row" style="margin-top:16px">
+          <button id="btnCreate" type="button">🗓️ บันทึกจอง</button>
+        </div>
+        <div id="bookOut" class="output"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== MY BOOKING ==================== -->
+  <div id="myBookingPage" class="page">
+    <div class="container">
+      <div class="page-header">
+        <button class="back-btn" onclick="showPage('landing')">‹</button>
+        <h2 class="page-title">📋 คิวของฉัน</h2>
+      </div>
+
+      <button id="btnLatest" class="btn-secondary" type="button" style="margin-bottom:12px">🔄 โหลดข้อมูลล่าสุด</button>
+      <div id="latestOut"></div>
+    </div>
+  </div>
+
+  <!-- ==================== HISTORY ==================== -->
+  <div id="historyPage" class="page">
+    <div class="container">
+      <div class="page-header">
+        <button class="back-btn" onclick="showPage('landing')">‹</button>
+        <h2 class="page-title">🕐 ประวัติใช้บริการ</h2>
+      </div>
+
+      <button id="btnHistory" class="btn-secondary" type="button" style="margin-bottom:12px">🔄 โหลดประวัติ</button>
+      <div id="historyOut" class="output"></div>
+      <div id="historyList"></div>
+    </div>
+  </div>
+
+  <!-- ==================== PRICING ==================== -->
+  <div id="pricingPage" class="page">
+    <div class="container">
+      <div class="page-header">
+        <button class="back-btn" onclick="showPage('landing')">‹</button>
+        <h2 class="page-title">💰 ราคา / โปรโมชั่น</h2>
+      </div>
+
+      <div class="card">
+        <div class="card-title">🧹 ล้างแอร์ติดผนัง</div>
+        <table class="price-table">
+          <tr><th>ขนาด BTU</th><th class="price">ราคา</th><th class="price">+ฆ่าเชื้อ</th></tr>
+          <tr><td>9,000</td><td class="price">500฿</td><td class="price">+100฿</td></tr>
+          <tr><td>12,000-13,000</td><td class="price">600฿</td><td class="price">+100฿</td></tr>
+          <tr><td>18,000</td><td class="price">700฿</td><td class="price">+100฿</td></tr>
+          <tr><td>24,000</td><td class="price">800฿</td><td class="price">+100฿</td></tr>
+        </table>
+        <p class="muted" style="margin-top:8px;">
+          ⚡ อินเวอร์เตอร์ +100฿ ทุก BTU<br>
+          ✅ รับประกันน้ำหยด 30 วัน
+        </p>
+      </div>
+
+      <div class="card">
+        <div class="card-title">💨 แอร์แบบอื่นๆ</div>
+        <table class="price-table">
+          <tr><th>ประเภท</th><th class="price">ราคา</th></tr>
+          <tr><td>แอร์แขวน (Ceiling)</td><td class="price">800-1,200฿</td></tr>
+          <tr><td>แอร์สี่ทิศ (Cassette)</td><td class="price">1,500-2,500฿</td></tr>
+          <tr><td>ตัดล้าง (Big Clean)</td><td class="price">สอบถาม</td></tr>
+        </table>
+      </div>
+
+      <div class="card" style="background:#fef3c7; border-color:#fde68a;">
+        <div class="card-title">🎉 โปรโมชั่น</div>
+        <p style="margin:0; font-size:13px;">
+          <strong>ล้าง 3 เครื่องขึ้นไป ลด 10%</strong>
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== CONTACT ==================== -->
+  <div id="contactPage" class="page">
+    <div class="container">
+      <div class="page-header">
+        <button class="back-btn" onclick="showPage('landing')">‹</button>
+        <h2 class="page-title">📍 ติดต่อเรา</h2>
+      </div>
+
+      <div class="card">
+        <div class="card-title">🏢 ข้อมูลบริษัท</div>
+        <p style="margin:0; font-size:13px; line-height:1.6;">
+          <strong>หจก. พีเอเอ แอร์ เซอร์วิส</strong><br>
+          <span class="mono">เลขทะเบียน: 0113562004205</span><br><br>
+          <strong>พื้นที่บริการ:</strong> บางพลี, บางนา, บางโฉลง, สำโรง, เทพารักษ์, แพรกษา, ศรีนครินทร์, พระประแดง, ปากน้ำ, ลาดกระบัง
+        </p>
+      </div>
+
+      <div class="card">
+        <div class="card-title">📞 ช่องทางติดต่อ</div>
+        <div class="quick-actions" style="margin:0">
+          <a href="tel:0842824465" class="quick-btn call">📞 084-282-4465</a>
+        </div>
+        <div class="quick-actions" style="margin-top:10px">
+          <a href="https://line.me/R/ti/p/@paaair" class="quick-btn line">💬 @paaair</a>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">⏰ เวลาทำการ</div>
+        <p style="margin:0; font-size:13px;">
+          <strong>จันทร์-เสาร์:</strong> 08:00-18:00<br>
+          <strong>อาทิตย์:</strong> หยุด
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== MODAL ==================== -->
+  <div id="modalOverlay" class="modal-overlay">
+    <div class="modal">
+      <div class="modal-head">
+        <div>เลื่อนงาน / ยกเลิก</div>
+        <button id="btnModalClose" type="button">ปิด</button>
+      </div>
+      <div class="modal-body">
+        <div class="row">
+          <div class="col2">
+            <label for="m_job">เลขงาน</label>
+            <input id="m_job" type="text" readonly />
+          </div>
+        </div>
+        <div class="row">
+          <div class="col2">
+            <label for="m_date">วันใหม่</label>
+            <input id="m_date" type="date" />
+          </div>
+          <div class="col2">
+            <label for="m_time">เวลาใหม่</label>
+            <input id="m_time" type="time" />
+          </div>
+        </div>
+        <div class="row">
+          <button id="btnReschedule" class="btn-dark" type="button">📅 เลื่อนงาน</button>
+        </div>
+        <div id="moveOut" class="output"></div>
+        <div class="divider"></div>
+        <div class="row">
+          <button id="btnCancel" class="btn-danger" type="button">✖ ยกเลิกงาน</button>
+        </div>
+        <div id="cancelOut" class="output"></div>
+      </div>
+    </div>
+  </div>
+
+<script>
+  const CONFIG = {
+    webhookUrl: "https://admin.paaair.online/webhook/core_action_v2",
+    liffId: "2008445752-IZ9iXrPC",
+    defaultOA: "customer_oa_1",
+    adminPhone: "0842824465"
+  };
+
+  const JOB_OPTIONS = {
+    "ล้างแอร์": ["แอร์ผนัง (Wall)", "แอร์แขวน (Ceiling)", "แอร์สี่ทิศทาง", "ตัดล้าง (Big Clean)", "ล้างเมือก/ทะลวงท่อ"],
+    "ซ่อมแอร์": ["เปลี่ยนคาปา", "เปลี่ยนเซ็นเซอร์", "เปลี่ยนมอเตอร์", "เชื่อมรั่ว", "เติมน้ำยา R32"],
+    "ติดตั้งแอร์": ["ติดตั้งใหม่", "เดินท่อใหม่", "รื้อถอน", "ย้ายคอยล์ร้อน"],
+    "ตรวจเช็ค": ["เช็คน้ำยา", "เช็ค Error", "น้ำหยด", "เสียงดัง", "ไม่เย็น"]
+  };
+
+  let userProfile = null;
+  let latestCache = null;
+
+  const $ = (id) => document.getElementById(id);
+
+  function setStatus(msg, type = "normal", ms = 3000) {
+    const bar = $("statusBar");
+    bar.className = "status-bar" + (type === "error" ? " error" : type === "warning" ? " warning" : "");
+    $("statusText").textContent = msg;
+    if (ms) setTimeout(() => { $("statusText").textContent = "พร้อมใช้งาน"; bar.className = "status-bar"; }, ms);
+  }
+
+  function showOutput(id, msg, type = "info") {
+    const el = $(id);
+    el.className = `output show ${type}`;
+    el.textContent = typeof msg === "string" ? msg : JSON.stringify(msg, null, 2);
+  }
+
+  function showPage(page) {
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    const map = {
+      'landing': 'landingPage', 'checkSlots': 'checkSlotsPage', 'booking': 'bookingPage',
+      'myBooking': 'myBookingPage', 'history': 'historyPage', 'pricing': 'pricingPage', 'contact': 'contactPage'
+    };
+
+    // Update page title based on current page
+    const titles = {
+      'landing': 'PAA Air Service | บริการล้างแอร์',
+      'checkSlots': 'เช็คคิวว่าง | PAA Air Service',
+      'booking': 'จองคิว | PAA Air Service',
+      'myBooking': 'คิวของฉัน | PAA Air Service',
+      'history': 'ประวัติใช้บริการ | PAA Air Service',
+      'pricing': 'ราคา/โปรโมชั่น | PAA Air Service',
+      'contact': 'ติดต่อเรา | PAA Air Service'
+    };
+
+    if (map[page]) {
+      $(map[page]).classList.add('active');
+      document.title = titles[page] || 'PAA Air Service | บริการล้างแอร์';
+    }
+
+    window.scrollTo(0, 0);
+  }
+
+  function todayISO() { return new Date().toISOString().split("T")[0]; }
+
+  function formatThaiDate(d) {
+    if (!d) return "-";
+    return new Date(d + "T00:00:00").toLocaleDateString("th-TH", { weekday: "short", day: "numeric", month: "short", year: "2-digit" });
+  }
+
+  function escapeHtml(s) {
+    return String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  }
+
+  // Job Tags
+  function renderJobTags() {
+    const type = $("job_type").value;
+    const tags = JOB_OPTIONS[type] || [];
+    $("jobTags").innerHTML = tags.map(t => `<span class="job-tag" data-tag="${escapeHtml(t)}">${escapeHtml(t)}</span>`).join("");
+    $("jobTags").querySelectorAll(".job-tag").forEach(el => {
+      el.addEventListener("click", () => {
+        el.classList.toggle("selected");
+        updateOtherServices();
+      });
+    });
+  }
+
+  function updateOtherServices() {
+    const tags = Array.from($("jobTags").querySelectorAll(".job-tag.selected")).map(el => el.dataset.tag);
+    const ta = $("other_services");
+    const lines = ta.value.split('\n').filter(l => l.trim() && !l.startsWith('['));
+    ta.value = (tags.length ? `[${tags.join(', ')}]` : '') + (lines.length ? '\n' + lines.join('\n') : '');
+  }
+
+  // Webhook
+  async function callWebhook(payload) {
+    let token = null;
+    try { if (liff.isLoggedIn()) token = liff.getAccessToken(); } catch {}
+
+    const body = {
+      ...payload,
+      line_user_id: userProfile?.userId || null,
+      line_display_name: userProfile?.displayName || null,
+      line_access_token: token,
+      accessToken: token,
+      oa_channel: payload.oa_channel ?? CONFIG.defaultOA,
+      source: "liff_v13"
+    };
+
+    const res = await fetch(CONFIG.webhookUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json();
+  }
+
+  // Slots
+  async function getSlots() {
+    showOutput("slotsOut", "🔄 กำลังตรวจสอบ...", "loading");
+    $("slotGrid").classList.add("hidden");
+
+    try {
+      const data = await callWebhook({ op: "slots", date: $("qDate").value, area: $("qArea").value });
+      const slots = data?.result?.slots || data?.slots || [];
+
+      if (slots.length) {
+        const avail = slots.filter(s => s.available > 0 || !s.is_full);
+        showOutput("slotsOut", `📅 ${formatThaiDate($("qDate").value)} - ว่าง ${avail.length}/${slots.length} ช่วง`, "success");
+
+        $("slotGrid").innerHTML = slots.map(s => {
+          const time = (s.time || s.slot_time || "").slice(0, 5);
+          const full = s.is_full || s.available === 0;
+          return `
+            <button class="slot-btn ${full ? 'taken' : 'available'}" ${full ? 'disabled' : `onclick="selectSlot('${time}')"`}>
+              <span class="time">${time}</span>
+              <span class="status">${full ? '❌ เต็ม' : '✅ ว่าง'}</span>
+            </button>`;
+        }).join("");
+        $("slotGrid").classList.remove("hidden");
+      } else {
+        showOutput("slotsOut", "ไม่พบข้อมูลคิว", "info");
+      }
+    } catch (e) {
+      showOutput("slotsOut", "❌ " + e.message, "error");
+    }
+  }
+
+  function selectSlot(time) {
+    $("bTime").value = time;
+    $("bDate").value = $("qDate").value;
+    showPage('booking');
+    setStatus(`✅ เลือก ${time}`);
+  }
+
+  // Booking
+  async function createBooking() {
+    const phone = $("phone").value.trim();
+    const name = $("name").value.trim();
+    const date = $("bDate").value;
+    const time = $("bTime").value;
+    const area = $("area").value;
+    const addrLine = $("addr_line").value.trim();
+    const sub = $("subdistrict").value.trim();
+    const dist = $("district").value.trim();
+    const prov = $("province").value.trim();
+    const zip = $("postcode").value.trim();
+
+    // Validate required fields
+    if (!phone || !name || !date || !time || !area || !addrLine) {
+      return showOutput("bookOut", "❌ กรุณากรอกข้อมูลให้ครบ", "error");
+    }
+
+    // Validate address fields
+    if (!validateCompleteAddress()) {
+      return showOutput("bookOut", "❌ กรุณากรอกที่อยู่ให้ถูกต้องและครบถ้วน", "error");
+    }
+
+    const fullAddr = `${addrLine} ต.${sub} อ.${dist} จ.${prov} ${zip}`;
+    const tags = Array.from($("jobTags").querySelectorAll(".job-tag.selected")).map(el => el.dataset.tag);
+
+    const payload = {
+      op: "book",
+      phone_digits: phone,
+      full_name: name,
+      slot_date: date,
+      slot_time: time,
+      area,
+      job_type: $("job_type").value,
+      address: fullAddr,
+      subdistrict: sub,
+      district: dist,
+      province: prov,
+      postcode: zip,
+      note: $("note").value.trim(),
+      other_services: $("other_services").value.trim(),
+      services: [{ service_type: "แอร์ติดผนัง (Wall Type)", qty: parseInt($("qty").value) || 1, options: tags }]
+    };
+
+    if ($("needTax").checked) {
+      payload.tax_info = { tax_id: $("tax_id").value.trim(), name: $("tax_name").value.trim() };
+    }
+
+    $("btnCreate").disabled = true;
+    showOutput("bookOut", "🔄 กำลังบันทึก...", "loading");
+
+    try {
+      const data = await callWebhook(payload);
+      if (data?.ok || data?.job_number) {
+        showOutput("bookOut", `✅ จองสำเร็จ!\nเลขงาน: ${data.job_number || '-'}`, "success");
+        localStorage.setItem("paa_last_addr", JSON.stringify({ addrLine, sub, dist, prov, zip }));
+      } else {
+        showOutput("bookOut", JSON.stringify(data), "info");
+      }
+    } catch (e) {
+      showOutput("bookOut", "❌ " + e.message, "error");
+    } finally {
+      $("btnCreate").disabled = false;
+    }
+  }
+
+  // Latest - Job Card Style
+  function statusPill(s) {
+    const m = { pending: { t: '⏳ รอดำเนินการ', c: 'warn' }, confirmed: { t: '✅ ยืนยันแล้ว', c: 'success' }, completed: { t: '✓ เสร็จ', c: 'success' }, cancelled: { t: '✖ ยกเลิก', c: 'danger' } };
+    return m[s] || { t: s || '-', c: 'info' };
+  }
+
+  function renderLatestCard(data) {
+    latestCache = data;
+    const b = data?.result?.booking || data?.booking;
+    const svcs = data?.result?.services || data?.services || [];
+    const cust = data?.result?.customer || data?.customer || {};
+
+    if (!b) {
+      return `<div class="card" style="text-align:center; padding:30px;"><p class="muted">📭 ยังไม่มีคิวจอง</p></div>`;
+    }
+
+    const pill = statusPill(b.status);
+    const dateTh = formatThaiDate(b.slot_date);
+    const time = (b.slot_time || "").slice(0, 5);
+    const phone = cust.phone || b.phone || "-";
+    const addr = cust.address_line || b.address || "-";
+
+    const svcHtml = svcs.length ? svcs.map(s => {
+      const meta = s.meta || {};
+      return `
+        <div class="svc-item">
+          <div>
+            <div class="svc-name">${meta.job_type || 'ล้างแอร์'}</div>
+            <div class="svc-detail">${meta.other_services || ''}</div>
+          </div>
+          <div class="svc-qty">x${s.qty || 1}</div>
+        </div>`;
+    }).join("") : '<div class="muted">ไม่มีรายการ</div>';
+
+    return `
+      <div class="job-card">
+        <div class="job-header">
+          <div>
+            <div class="job-title">เลขงาน</div>
+            <div class="job-id">${escapeHtml(b.job_number || '-')}</div>
+          </div>
+          <div class="job-status">${pill.t}</div>
+        </div>
+
+        <div class="section-box">
+          <div class="info-grid">
+            <div class="info-box">
+              <div class="label">📅 วันที่</div>
+              <div class="value">${dateTh}</div>
+            </div>
+            <div class="info-box">
+              <div class="label">⏰ เวลา</div>
+              <div class="value">${time} น.</div>
+            </div>
+            <div class="info-box">
+              <div class="label">📍 พื้นที่</div>
+              <div class="value">${escapeHtml(b.area || '-')}</div>
+            </div>
+            <div class="info-box">
+              <div class="label">📞 เบอร์ติดต่อ</div>
+              <div class="value">${escapeHtml(phone)}</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="section-box">
+          <div class="sec-title">🏠 ที่อยู่</div>
+          <div class="info-text" style="font-weight:500;">${escapeHtml(addr)}</div>
+        </div>
+
+        <div class="svc-list">
+          <div class="sec-title">📋 รายการบริการ</div>
+          ${svcHtml}
+        </div>
+
+        <div class="action-bar">
+          <a href="tel:${escapeHtml(CONFIG.adminPhone)}" class="quick-btn call">📞 โทรแอดมิน</a>
+          <button class="btn-secondary" onclick="openModal()">📝 เลื่อน/ยกเลิก</button>
+        </div>
+      </div>
+    `;
+  }
+
+  async function getLatest() {
+    $("latestOut").innerHTML = '<div class="output show loading">🔄 กำลังโหลด...</div>';
+    try {
+      const data = await callWebhook({ op: "latest" });
+      $("latestOut").innerHTML = renderLatestCard(data);
+    } catch (e) {
+      $("latestOut").innerHTML = `<div class="output show error">❌ ${e.message}</div>`;
+    }
+  }
+
+  // History
+  async function getHistory() {
+    showOutput("historyOut", "🔄 กำลังโหลด...", "loading");
+    $("historyList").innerHTML = "";
+
+    try {
+      const data = await callWebhook({ op: "history", limit: 10 });
+      const list = data?.result?.bookings || data?.bookings || [];
+
+      if (list.length) {
+        $("historyOut").className = "output";
+        $("historyList").innerHTML = list.map(b => {
+          const pill = statusPill(b.status);
+          const svcs = b.services || [];
+          const svcText = svcs.map(s => `${s.meta?.job_type || 'ล้างแอร์'} x${s.qty}`).join(', ') || '-';
+          return `
+            <div class="history-item">
+              <div class="top">
+                <span class="job-num">${escapeHtml(b.job_number || b.id)}</span>
+                <span class="pill ${pill.c}">${pill.t}</span>
+              </div>
+              <div class="details">
+                📅 ${formatThaiDate(b.slot_date)} • ${(b.slot_time || "").slice(0, 5)}<br>
+                📍 ${escapeHtml(b.area || '-')}<br>
+                🔧 ${escapeHtml(svcText)}
+              </div>
+            </div>`;
+        }).join("");
+      } else {
+        showOutput("historyOut", "📭 ยังไม่มีประวัติ", "info");
+      }
+    } catch (e) {
+      showOutput("historyOut", "❌ " + e.message, "error");
+    }
+  }
+
+  // Modal
+  function openModal() {
+    const b = latestCache?.result?.booking || latestCache?.booking;
+    $("m_job").value = b?.job_number || "";
+    $("m_date").value = b?.slot_date || todayISO();
+    $("m_time").value = (b?.slot_time || "09:00").slice(0, 5);
+    $("modalOverlay").classList.add("show");
+  }
+
+  function closeModal() { $("modalOverlay").classList.remove("show"); }
+
+  async function doReschedule() {
+    const b = latestCache?.result?.booking || latestCache?.booking;
+    const job = b?.job_number || $("m_job").value;
+    if (!job || !$("m_date").value) return showOutput("moveOut", "❌ ข้อมูลไม่ครบ", "error");
+
+    $("btnReschedule").disabled = true;
+    showOutput("moveOut", "🔄 กำลังส่ง...", "loading");
+    try {
+      const data = await callWebhook({ op: "reschedule", job_number: job, new_date: $("m_date").value, new_time: $("m_time").value });
+      showOutput("moveOut", data?.ok ? "✅ สำเร็จ" : JSON.stringify(data), data?.ok ? "success" : "info");
+    } catch (e) {
+      showOutput("moveOut", "❌ " + e.message, "error");
+    } finally {
+      $("btnReschedule").disabled = false;
+    }
+  }
+
+  async function doCancel() {
+    const b = latestCache?.result?.booking || latestCache?.booking;
+    const job = b?.job_number;
+    if (!job || !confirm(`ยืนยันยกเลิก ${job}?`)) return;
+
+    $("btnCancel").disabled = true;
+    showOutput("cancelOut", "🔄 กำลังยกเลิก...", "loading");
+    try {
+      const data = await callWebhook({ op: "cancel", key: job });
+      showOutput("cancelOut", data?.ok ? "✅ ยกเลิกแล้ว" : JSON.stringify(data), data?.ok ? "success" : "info");
+    } catch (e) {
+      showOutput("cancelOut", "❌ " + e.message, "error");
+    } finally {
+      $("btnCancel").disabled = false;
+    }
+  }
+
+  // Address Autocomplete - Local assets
+  function initThaiAddress() {
+    // Check if initialization is already completed or in progress
+    if (window.thailandInitState && window.thailandInitState.completed) {
+      // Already initialized by script loader, just verify fields are enabled
+      document.querySelectorAll('#subdistrict, #district, #province, #postcode').forEach(field => {
+        field.disabled = false;
+      });
+      return;
+    }
+
+    // If script loader is still working, wait a bit longer
+    if (window.thailandInitState && window.thailandInitState.inProgress) {
+      setTimeout(initThaiAddress, 2000); // Wait 2 more seconds
+      return;
+    }
+
+    // The library is now initialized in the head section with local database
+    // Just verify it's working and set up fallback
+    if (typeof jQuery !== 'undefined' && jQuery.Thailand) {
+      console.log("Thai address autocomplete is ready with local database");
+      // Ensure fields are enabled
+      jQuery('#subdistrict, #district, #province, #postcode').prop('disabled', false);
+
+      // Test database connection
+      jQuery.ajax({
+        url: 'https://paaair.online/customer-app/assets/db.json',
+        method: 'HEAD',
+        success: function() {
+          console.log("Local database is accessible");
+        },
+        error: function() {
+          console.warn("Local database not accessible, but autocomplete may still work");
+        }
+      });
+    } else {
+      // Mark as completed with manual mode
+      if (!window.thailandInitState) {
+        window.thailandInitState = { completed: true, method: 'manual', inProgress: false };
+      } else {
+        window.thailandInitState.completed = true;
+        window.thailandInitState.method = 'manual';
+        window.thailandInitState.inProgress = false;
+      }
+
+      console.log("Thai address autocomplete: Manual input mode");
+      // Enable manual input as fallback
+      document.querySelectorAll('#subdistrict, #district, #province, #postcode').forEach(field => {
+        field.disabled = false;
+      });
+
+      // Add basic autocomplete hint for manual input
+      const subdistrictField = document.getElementById('subdistrict');
+      if (subdistrictField) {
+        subdistrictField.setAttribute('placeholder', 'พิมพ์ชื่อตำบล/แขวง (เช่น บางพลี)');
+        subdistrictField.setAttribute('autocomplete', 'off');
+      }
+    }
+  }
+
+  // Enhanced address field handlers
+  function setupAddressHandlers() {
+    // Add input event listeners for better UX
+    const addressFields = ['subdistrict', 'district', 'province', 'postcode'];
+
+    addressFields.forEach(fieldId => {
+      const field = document.getElementById(fieldId);
+      const fieldContainer = document.getElementById(fieldId + '-field');
+
+      if (field && fieldContainer) {
+        // Add input validation
+        field.addEventListener('input', function() {
+          validateAddressField(fieldId, this.value);
+        });
+
+        // Add loading state during autocomplete
+        field.addEventListener('keydown', function() {
+          if (this.value.length >= 2) {
+            fieldContainer.classList.add('loading');
+          }
+        });
+
+        // Remove loading state
+        field.addEventListener('blur', function() {
+          setTimeout(() => fieldContainer.classList.remove('loading'), 500);
+        });
+      }
+    });
+  }
+
+  // Address field validation
+  function validateAddressField(fieldId, value) {
+    const fieldContainer = document.getElementById(fieldId + '-field');
+    if (!fieldContainer) return;
+
+    let isValid = false;
+
+    switch(fieldId) {
+      case 'subdistrict':
+        isValid = value.length >= 2;
+        break;
+      case 'district':
+        isValid = value.length >= 2;
+        break;
+      case 'province':
+        isValid = value.length >= 2;
+        break;
+      case 'postcode':
+        isValid = /^\d{5}$/.test(value);
+        break;
+    }
+
+    fieldContainer.classList.toggle('valid', isValid && value.length > 0);
+    fieldContainer.classList.toggle('invalid', !isValid && value.length > 0);
+
+    return isValid;
+  }
+
+  // Validate complete address
+  function validateCompleteAddress() {
+    const fields = ['subdistrict', 'district', 'province', 'postcode'];
+    let allValid = true;
+
+    fields.forEach(fieldId => {
+      const field = document.getElementById(fieldId);
+      if (field && field.value) {
+        if (!validateAddressField(fieldId, field.value)) {
+          allValid = false;
+        }
+      } else {
+        allValid = false;
+      }
+    });
+
+    return allValid;
+  }
+
+  // Init
+  async function init() {
+    // Fix LIFF redirect URL CSS loading issue
+    if (window.location.search.includes('code=') || window.location.search.includes('liffClientId=')) {
+      // Remove problematic URL parameters that cause CSS loading issues
+      const url = new URL(window.location);
+      const paramsToRemove = ['code', 'state', 'liffClientId', 'liffRedirectUri'];
+      paramsToRemove.forEach(param => url.searchParams.delete(param));
+
+      // Don't redirect immediately, just fix the URL for future loads
+      window.history.replaceState({}, document.title, url.toString());
+    }
+
+    $("qDate").value = todayISO();
+    $("bDate").value = todayISO();
+    $("qDate").min = todayISO();
+    $("bDate").min = todayISO();
+
+    $("btnSlots").addEventListener("click", getSlots);
+    $("btnCreate").addEventListener("click", createBooking);
+    $("btnLatest").addEventListener("click", getLatest);
+    $("btnHistory").addEventListener("click", getHistory);
+    $("btnLogout").addEventListener("click", () => { try { liff.logout(); } catch {} location.reload(); });
+    $("btnModalClose").addEventListener("click", closeModal);
+    $("modalOverlay").addEventListener("click", (e) => { if (e.target === $("modalOverlay")) closeModal(); });
+    $("btnReschedule").addEventListener("click", doReschedule);
+    $("btnCancel").addEventListener("click", doCancel);
+
+    $("job_type").addEventListener("change", renderJobTags);
+    $("needTax").addEventListener("change", () => $("taxFields").classList.toggle("hidden", !$("needTax").checked));
+
+    renderJobTags();
+
+    // Load saved address
+    try {
+      const saved = JSON.parse(localStorage.getItem("paa_last_addr") || "{}");
+      if (saved.addrLine) $("addr_line").value = saved.addrLine;
+      if (saved.sub) $("subdistrict").value = saved.sub;
+      if (saved.dist) $("district").value = saved.dist;
+      if (saved.prov) $("province").value = saved.prov;
+      if (saved.zip) $("postcode").value = saved.zip;
+    } catch {}
+
+    // Setup address field handlers
+    setupAddressHandlers();
+
+    // Verify Thai Address Autocomplete is working
+    setTimeout(initThaiAddress, 1000);
+
+    // Init LIFF
+    try {
+      setStatus("กำลังเชื่อมต่อ LINE...", "warning", 5000);
+      await liff.init({ liffId: CONFIG.liffId });
+
+      if (!liff.isLoggedIn()) {
+        liff.login();
+        return;
+      }
+
+      userProfile = await liff.getProfile();
+      $("profileName").textContent = userProfile.displayName || "-";
+      $("profileUid").textContent = `UID: ${(userProfile.userId || "").slice(0, 8)}...`;
+      $("profilePic").src = userProfile.pictureUrl || "";
+      $("profileCard").classList.remove("hidden");
+
+      if (userProfile.displayName && !$("name").value) $("name").value = userProfile.displayName;
+
+      setStatus("✅ พร้อมใช้งาน", "normal", 0);
+    } catch (e) {
+      console.error("LIFF error:", e);
+      setStatus("⚠️ ไม่สามารถเชื่อมต่อ LINE", "error", 0);
+
+      if (location.search.includes("dev=1")) {
+        userProfile = { userId: "dev001", displayName: "Dev User" };
+        $("profileName").textContent = "Dev User";
+        $("profileCard").classList.remove("hidden");
+        setStatus("🛠️ Dev Mode", "warning", 0);
+      }
+    }
+  }
+
+  document.addEventListener("DOMContentLoaded", init);
+</script>
+</body>
+</html>
