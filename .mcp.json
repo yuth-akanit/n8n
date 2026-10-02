@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "line-bot": {
+      "command": "bash",
+      "args": [
+        "scripts/run-line-bot-mcp.sh"
+      ]
+    }
+  }
+}

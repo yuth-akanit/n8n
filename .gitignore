@@ -1,0 +1,4 @@
+# Local credentials. Never commit LINE or other service tokens.
+.env
+.env.*
+!.env.example
